@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  StyleSheet,
 } from "react-native";
 import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
@@ -120,17 +121,17 @@ export function PersonSearchSelector({
                a device-specific status-bar quirk, set keyboardVerticalOffset
                to StatusBar.currentHeight.
       */}
-      <View style={{ flex: 1 }}>
-        {/* Tap-to-dismiss area above the sheet */}
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
+        {/* Full-screen backdrop — absoluteFill so it doesn't participate in flex layout */}
         <Pressable
           onPress={handleClose}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]}
         />
 
-        {/* Sheet — near-fullscreen so the search bar is never hidden */}
+        {/* Sheet — maxHeight so KAV can shrink below SHEET_HEIGHT when keyboard adjusts window */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ height: SHEET_HEIGHT }}
+          style={{ maxHeight: SHEET_HEIGHT }}
         >
           <View
             style={{
