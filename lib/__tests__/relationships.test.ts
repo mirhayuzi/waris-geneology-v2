@@ -49,6 +49,9 @@ const persons: Person[] = [
   person("datukBapa", "DatukBapa", "male"),
   person("nenekBapa", "NenekBapa", "female"),
   person("pakcik", "Pakcik", "male"),
+  person("makcik", "Makcik", "female"),   // sibling of Tiajar and Pakcik (Sibil+NenekIbu)
+  person("sepupu", "Sepupu", "female"),   // child of Pakcik
+  person("anakKakak", "AnakKakak", "female"), // child of Kakak (Yuzi's anak saudara perempuan)
   person("anakL", "AnakL", "male"),
   person("anakP", "AnakP", "female"),
   person("stranger", "Stranger", "male"),
@@ -72,12 +75,16 @@ const parentChildren: ParentChild[] = [
   pc("pc8", "nenekIbu", "tiajar"),
   pc("pc9", "sibil", "pakcik"),
   pc("pc10", "nenekIbu", "pakcik"),
-  pc("pc11", "datukBapa", "mohd"),
-  pc("pc12", "nenekBapa", "mohd"),
-  pc("pc13", "yuzi", "anakL"),
-  pc("pc14", "nisa", "anakL"),
-  pc("pc15", "yuzi", "anakP"),
-  pc("pc16", "nisa", "anakP"),
+  pc("pc11", "sibil", "makcik"),
+  pc("pc12", "nenekIbu", "makcik"),
+  pc("pc13", "datukBapa", "mohd"),
+  pc("pc14", "nenekBapa", "mohd"),
+  pc("pc15", "pakcik", "sepupu"),
+  pc("pc16", "kakak", "anakKakak"),
+  pc("pc17", "yuzi", "anakL"),
+  pc("pc18", "nisa", "anakL"),
+  pc("pc19", "yuzi", "anakP"),
+  pc("pc20", "nisa", "anakP"),
 ];
 
 const m = (
@@ -290,5 +297,206 @@ describe("getRelationships — Chunk 1 direct labels", () => {
   it("deceased parent (Mohd) still yields Bapa label", () => {
     // Mohd is deceased (isAlive: false) — should still be labelled Bapa
     expect(bToA("yuzi", "mohd")).toContain("Bapa");
+  });
+});
+
+// ─── Synthetic fixture for extended sideling tests ────────────────────────────
+//
+//   sGreatGP (M)
+//   ├── sGpA (M) ── sParA (M) ── sPersonA (M)   ← dua pupu with sPersonB
+//   └── sGpB (M) ── sParB (M) ── sPersonB (M)
+//
+//   sGpParent (M)
+//   ├── sGp (M) ── sPar (M) ─┬── sSubject (M)   ← datuk saudara / cucu saudara tests
+//   └── sDatukSaudara (M)     └── sSibling (M) ── sSibChild (F) ── sCucuSaudara (M)
+
+const synPersons: Person[] = [
+  person("sGreatGP", "SynGreatGP", "male"),
+  person("sGpA", "SynGpA", "male"),
+  person("sGpB", "SynGpB", "male"),
+  person("sParA", "SynParA", "male"),
+  person("sParB", "SynParB", "male"),
+  person("sPersonA", "SynPersonA", "male"),
+  person("sPersonB", "SynPersonB", "male"),
+  person("sGpParent", "SynGpParent", "male"),
+  person("sGp", "SynGp", "male"),
+  person("sDatukSaudara", "SynDatukSaudara", "male"),
+  person("sPar", "SynPar", "male"),
+  person("sSubject", "SynSubject", "male"),
+  person("sSibling", "SynSibling", "male"),
+  person("sSibChild", "SynSibChild", "female"),
+  person("sCucuSaudara", "SynCucuSaudara", "male"),
+];
+
+const synPc: ParentChild[] = [
+  // dua pupu chain
+  pc("s1", "sGreatGP", "sGpA"),
+  pc("s2", "sGreatGP", "sGpB"),
+  pc("s3", "sGpA", "sParA"),
+  pc("s4", "sGpB", "sParB"),
+  pc("s5", "sParA", "sPersonA"),
+  pc("s6", "sParB", "sPersonB"),
+  // datuk saudara + cucu saudara chain
+  pc("s7", "sGpParent", "sGp"),
+  pc("s8", "sGpParent", "sDatukSaudara"),
+  pc("s9", "sGp", "sPar"),
+  pc("s10", "sPar", "sSubject"),
+  pc("s11", "sPar", "sSibling"),
+  pc("s12", "sSibling", "sSibChild"),
+  pc("s13", "sSibChild", "sCucuSaudara"),
+];
+
+const synFamily: FamilyData = {
+  persons: synPersons,
+  marriages: [],
+  parentChildren: synPc,
+  collaborators: [],
+  familyName: "Synthetic",
+  createdAt: "",
+  updatedAt: "",
+};
+
+function synAtoB(aId: string, bId: string) {
+  return getRelationships(aId, bId, synFamily).aToB.map((l) => l.labelBm);
+}
+function synBtoA(aId: string, bId: string) {
+  return getRelationships(aId, bId, synFamily).bToA.map((l) => l.labelBm);
+}
+function synResult(aId: string, bId: string) {
+  return getRelationships(aId, bId, synFamily);
+}
+
+// ─── Chunk 2: Sideling label tests ───────────────────────────────────────────
+
+describe("getRelationships — Chunk 2 sideling labels", () => {
+  // ── Pakcik / Makcik ───────────────────────────────────────────────────────
+
+  it("Yuzi → Pakcik (tiajar's brother): aToB=Anak Saudara Lelaki, bToA=Pakcik sebelah ibu", () => {
+    expect(aToB("yuzi", "pakcik")).toContain("Anak Saudara Lelaki");
+    expect(bToA("yuzi", "pakcik")).toContain("Pakcik sebelah ibu");
+  });
+
+  it("Pakcik → Yuzi (reverse): aToB=Pakcik sebelah ibu, bToA=Anak Saudara Lelaki", () => {
+    expect(aToB("pakcik", "yuzi")).toContain("Pakcik sebelah ibu");
+    expect(bToA("pakcik", "yuzi")).toContain("Anak Saudara Lelaki");
+  });
+
+  it("Yuzi → Makcik (tiajar's sister): aToB=Anak Saudara Lelaki, bToA=Makcik sebelah ibu", () => {
+    expect(aToB("yuzi", "makcik")).toContain("Anak Saudara Lelaki");
+    expect(bToA("yuzi", "makcik")).toContain("Makcik sebelah ibu");
+  });
+
+  it("Pakcik → Kakak: aToB=Pakcik sebelah ibu, bToA=Anak Saudara Perempuan", () => {
+    expect(aToB("pakcik", "kakak")).toContain("Pakcik sebelah ibu");
+    expect(bToA("pakcik", "kakak")).toContain("Anak Saudara Perempuan");
+  });
+
+  it("Pakcik → Adik (Tiajar's daughter with Rejin): aToB=Pakcik sebelah ibu, bToA=Anak Saudara Perempuan", () => {
+    // Adik's mother is Tiajar → Pakcik (Tiajar's sibling) is Adik's Pakcik sebelah ibu
+    expect(aToB("pakcik", "adik")).toContain("Pakcik sebelah ibu");
+    expect(bToA("pakcik", "adik")).toContain("Anak Saudara Perempuan");
+  });
+
+  it("label has saudara category", () => {
+    const result = getRelationships("yuzi", "pakcik", family);
+    expect(result.bToA[0].category).toBe("saudara");
+  });
+
+  // ── Anak Saudara ─────────────────────────────────────────────────────────
+
+  it("Yuzi → AnakKakak (niece): aToB=Pakcik sebelah ibu, bToA=Anak Saudara Perempuan", () => {
+    // AnakKakak's mother is Kakak (female → sebelah ibu from AnakKakak's perspective)
+    // Yuzi is Kakak's sibling → Yuzi is AnakKakak's Pakcik sebelah ibu
+    expect(aToB("yuzi", "anakKakak")).toContain("Pakcik sebelah ibu");
+    expect(bToA("yuzi", "anakKakak")).toContain("Anak Saudara Perempuan");
+  });
+
+  // ── Datuk Saudara / Nenek Saudara / Cucu Saudara ─────────────────────────
+
+  it("Pakcik → AnakL: aToB=Datuk Saudara sebelah bapa, bToA=Cucu Saudara Lelaki", () => {
+    // AnakL's grandparents at depth 2: mohd & tiajar (via Yuzi who is male → sebelah bapa)
+    // Pakcik is Tiajar's sibling → Pakcik is AnakL's Datuk Saudara sebelah bapa
+    expect(aToB("pakcik", "anakL")).toContain("Datuk Saudara sebelah bapa");
+    expect(bToA("pakcik", "anakL")).toContain("Cucu Saudara Lelaki");
+  });
+
+  it("Makcik → AnakL: aToB=Nenek Saudara sebelah bapa, bToA=Cucu Saudara Lelaki", () => {
+    expect(aToB("makcik", "anakL")).toContain("Nenek Saudara sebelah bapa");
+    expect(bToA("makcik", "anakL")).toContain("Cucu Saudara Lelaki");
+  });
+
+  it("AnakL → Pakcik: aToB=Cucu Saudara Lelaki, bToA=Datuk Saudara sebelah bapa", () => {
+    expect(aToB("anakL", "pakcik")).toContain("Cucu Saudara Lelaki");
+    expect(bToA("anakL", "pakcik")).toContain("Datuk Saudara sebelah bapa");
+  });
+
+  it("synthetic: sSubject → sDatukSaudara: aToB=Cucu Saudara Lelaki, bToA=Datuk Saudara sebelah bapa", () => {
+    // sSubject → sPar (male→sebelah_bapa) → sGp; sDatukSaudara shares sGpParent with sGp
+    expect(synAtoB("sSubject", "sDatukSaudara")).toContain("Cucu Saudara Lelaki");
+    expect(synBtoA("sSubject", "sDatukSaudara")).toContain("Datuk Saudara sebelah bapa");
+  });
+
+  it("synthetic: sSubject → sCucuSaudara: aToB=Datuk Saudara sebelah ibu, bToA=Cucu Saudara Lelaki", () => {
+    // sCucuSaudara → sSibChild (female→sebelah_ibu) → sSibling; sSubject is sSibling's sibling
+    expect(synAtoB("sSubject", "sCucuSaudara")).toContain("Datuk Saudara sebelah ibu");
+    expect(synBtoA("sSubject", "sCucuSaudara")).toContain("Cucu Saudara Lelaki");
+  });
+
+  // ── Sepupu ────────────────────────────────────────────────────────────────
+
+  it("Yuzi → Sepupu: degree=1, aToB=Sepupu sebelah ibu, bToA=Sepupu sebelah bapa", () => {
+    // Shared grandparents: Sibil & NenekIbu
+    // From Yuzi: both are sebelah_ibu (via Tiajar, female)
+    // From Sepupu: both are sebelah_bapa (via Pakcik, male)
+    const result = getRelationships("yuzi", "sepupu", family);
+    expect(result.aToB[0].labelBm).toBe("Sepupu sebelah ibu");
+    expect(result.bToA[0].labelBm).toBe("Sepupu sebelah bapa");
+    expect(result.aToB[0].degree).toBe(1);
+  });
+
+  it("Sepupu → Yuzi: aToB=Sepupu sebelah bapa, bToA=Sepupu sebelah ibu", () => {
+    const result = getRelationships("sepupu", "yuzi", family);
+    expect(result.aToB[0].labelBm).toBe("Sepupu sebelah bapa");
+    expect(result.bToA[0].labelBm).toBe("Sepupu sebelah ibu");
+  });
+
+  // ── Dua Pupu ─────────────────────────────────────────────────────────────
+
+  it("synthetic: sPersonA → sPersonB: Dua Pupu (degree 2)", () => {
+    // Shared great-grandparent sGreatGP at depth 3; no shared grandparent at depth 2
+    const result = synResult("sPersonA", "sPersonB");
+    expect(result.aToB[0].labelBm).toMatch(/Dua Pupu/);
+    expect(result.aToB[0].degree).toBe(2);
+  });
+
+  it("synthetic: dua pupu is symmetric", () => {
+    const ab = synResult("sPersonA", "sPersonB").aToB[0].labelBm;
+    const ba = synResult("sPersonB", "sPersonA").aToB[0].labelBm;
+    expect(ab).toMatch(/Dua Pupu/);
+    expect(ba).toMatch(/Dua Pupu/);
+  });
+
+  // ── Negative / guard cases ────────────────────────────────────────────────
+
+  it("siblings are NOT labelled Sepupu (guard prevents pupu for shared parent)", () => {
+    // Yuzi and Kakak share parent Mohd & Tiajar → detectPupu returns null
+    const labels = aToB("yuzi", "kakak");
+    expect(labels).not.toContain("Sepupu");
+    expect(labels.some((l) => ["Adik", "Abang", "Kakak", "Adik-beradik"].includes(l))).toBe(true);
+  });
+
+  it("Yuzi → Pakcik is NOT labelled Sepupu (different ancestor depth)", () => {
+    // Pakcik has no grandparents in fixture → no shared depth-2 ancestor with Yuzi
+    const labels = aToB("yuzi", "pakcik");
+    expect(labels).not.toContain("Sepupu");
+  });
+
+  it("Pakcik and Tiajar are siblings, not pakcik/makcik to each other", () => {
+    // detectPakcikAnakSaudara checks if one is a sibling of the other's PARENT
+    // Pakcik's parents = {Sibil, NenekIbu}; Tiajar's parents = {Sibil, NenekIbu}
+    // Neither is a sibling of the other's parent (Sibil has no parents in fixture)
+    const labels = aToB("pakcik", "tiajar");
+    expect(labels).not.toContain("Pakcik sebelah ibu");
+    expect(labels).toContain("Adik-beradik"); // they're siblings
   });
 });

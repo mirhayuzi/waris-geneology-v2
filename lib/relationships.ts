@@ -141,6 +141,13 @@ function lbl(
   return { category, labelBm, ...extras };
 }
 
+/** True if xId and yId share at least one parent (i.e. are siblings). */
+function areSiblings(xId: string, yId: string, family: FamilyData): boolean {
+  if (xId === yId) return false;
+  const px = new Set(getParents(xId, family));
+  return getParents(yId, family).some((p) => px.has(p));
+}
+
 // ── Detection (Chunk 1: direct labels only) ───────────────────────────────────
 
 function detectSpouse(
@@ -307,6 +314,201 @@ function detectSibling(
   };
 }
 
+// ── Detection (Chunk 2: sideling labels) ─────────────────────────────────────
+
+/**
+ * Pakcik/Makcik ↔ Anak Saudara.
+ *
+ * Direction decision: "Pakcik sebelah X" — the side is determined by the
+ * gender of A's parent who is B's sibling (female parent → sebelah ibu).
+ * Multiple matches (endogamy: B is sibling of BOTH parents) return only the
+ * first match; Chunk 4 can surface all.
+ */
+function detectPakcikAnakSaudara(
+  aId: string,
+  bId: string,
+  family: FamilyData,
+): { aToB: RelationshipLabel; bToA: RelationshipLabel } | null {
+  const a = personOf(aId, family);
+  const b = personOf(bId, family);
+
+  // Case 1: B is a sibling of one of A's parents → B is A's Pakcik/Makcik
+  for (const parentId of getParents(aId, family)) {
+    if (!areSiblings(bId, parentId, family)) continue;
+    const parent = personOf(parentId, family);
+    const side: RelationshipSide =
+      parent?.gender === "female" ? "sebelah_ibu" : "sebelah_bapa";
+    const pakcikLabel =
+      b?.gender === "male" ? "Pakcik" : b?.gender === "female" ? "Makcik" : "Pakcik/Makcik";
+    const anakLabel =
+      a?.gender === "male"
+        ? "Anak Saudara Lelaki"
+        : a?.gender === "female"
+          ? "Anak Saudara Perempuan"
+          : "Anak Saudara";
+    return {
+      // A is B's anak saudara
+      aToB: lbl("saudara", anakLabel),
+      // B is A's pakcik/makcik
+      bToA: lbl("saudara", `${pakcikLabel} ${side.replace(/_/g, " ")}`, { side }),
+    };
+  }
+
+  // Case 2: A is a sibling of one of B's parents → A is B's Pakcik/Makcik
+  for (const parentId of getParents(bId, family)) {
+    if (!areSiblings(aId, parentId, family)) continue;
+    const parent = personOf(parentId, family);
+    const side: RelationshipSide =
+      parent?.gender === "female" ? "sebelah_ibu" : "sebelah_bapa";
+    const pakcikLabel =
+      a?.gender === "male" ? "Pakcik" : a?.gender === "female" ? "Makcik" : "Pakcik/Makcik";
+    const anakLabel =
+      b?.gender === "male"
+        ? "Anak Saudara Lelaki"
+        : b?.gender === "female"
+          ? "Anak Saudara Perempuan"
+          : "Anak Saudara";
+    return {
+      // A is B's pakcik/makcik
+      aToB: lbl("saudara", `${pakcikLabel} ${side.replace(/_/g, " ")}`, { side }),
+      // B is A's anak saudara
+      bToA: lbl("saudara", anakLabel),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Datuk/Nenek Saudara ↔ Cucu Saudara.
+ *
+ * Side comes from A's grandparent entry (which tracks which of A's parents
+ * was the first step). Returns the first matching grandparent; Chunk 4 can
+ * surface all for endogamous trees.
+ */
+function detectDatukSaudaraCucuSaudara(
+  aId: string,
+  bId: string,
+  family: FamilyData,
+): { aToB: RelationshipLabel; bToA: RelationshipLabel } | null {
+  const a = personOf(aId, family);
+  const b = personOf(bId, family);
+
+  // Case 1: B is a sibling of one of A's grandparents → B is A's Datuk/Nenek Saudara
+  for (const gpEntry of getAncestorsAtDepth(aId, 2, family)) {
+    if (!areSiblings(bId, gpEntry.id, family)) continue;
+    const gpSaudaraLabel =
+      b?.gender === "male"
+        ? "Datuk Saudara"
+        : b?.gender === "female"
+          ? "Nenek Saudara"
+          : "Datuk/Nenek Saudara";
+    const cucuLabel =
+      a?.gender === "male"
+        ? "Cucu Saudara Lelaki"
+        : a?.gender === "female"
+          ? "Cucu Saudara Perempuan"
+          : "Cucu Saudara";
+    const sideStr = gpEntry.side ? ` ${gpEntry.side.replace(/_/g, " ")}` : "";
+    return {
+      // A is B's cucu saudara
+      aToB: lbl("saudara", cucuLabel),
+      // B is A's datuk/nenek saudara (with side from A's ancestry)
+      bToA: lbl("saudara", `${gpSaudaraLabel}${sideStr}`, { side: gpEntry.side }),
+    };
+  }
+
+  // Case 2: A is a sibling of one of B's grandparents → A is B's Datuk/Nenek Saudara
+  for (const gpEntry of getAncestorsAtDepth(bId, 2, family)) {
+    if (!areSiblings(aId, gpEntry.id, family)) continue;
+    const gpSaudaraLabel =
+      a?.gender === "male"
+        ? "Datuk Saudara"
+        : a?.gender === "female"
+          ? "Nenek Saudara"
+          : "Datuk/Nenek Saudara";
+    const cucuLabel =
+      b?.gender === "male"
+        ? "Cucu Saudara Lelaki"
+        : b?.gender === "female"
+          ? "Cucu Saudara Perempuan"
+          : "Cucu Saudara";
+    const sideStr = gpEntry.side ? ` ${gpEntry.side.replace(/_/g, " ")}` : "";
+    return {
+      // A is B's datuk/nenek saudara (side from B's ancestry)
+      aToB: lbl("saudara", `${gpSaudaraLabel}${sideStr}`, { side: gpEntry.side }),
+      // B is A's cucu saudara
+      bToA: lbl("saudara", cucuLabel),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Pupu (Sepupu / Dua Pupu / Tiga Pupu / Empat Pupu).
+ *
+ * Algorithm: find the shallowest depth D (2–5) at which A and B share an
+ * ancestor where both are at EQUAL depth from it. Degree = D - 1.
+ *
+ * Sibling guard: siblings share a parent (depth 1), so they would also share
+ * grandparents — we explicitly exclude them to avoid false sepupu labels.
+ *
+ * Side: applied only when ALL shared ancestors at that depth are on the same
+ * side (from each perspective independently). Mixed sides → no suffix.
+ */
+function detectPupu(
+  aId: string,
+  bId: string,
+  family: FamilyData,
+): { aToB: RelationshipLabel; bToA: RelationshipLabel } | null {
+  // Siblings are siblings, not sepupu
+  if (areSiblings(aId, bId, family)) return null;
+
+  for (let depth = 2; depth <= 5; depth++) {
+    const ancestorsOfA = getAncestorsAtDepth(aId, depth, family);
+    const ancestorsOfB = getAncestorsAtDepth(bId, depth, family);
+    const aIdSet = new Set(ancestorsOfA.map((e) => e.id));
+    const sharedBEntries = ancestorsOfB.filter((e) => aIdSet.has(e.id));
+    if (sharedBEntries.length === 0) continue;
+
+    const degree = depth - 1;
+    const baseLabel = pupuDegreeLabel(degree);
+    const sharedIdSet = new Set(sharedBEntries.map((e) => e.id));
+    const aMatchEntries = ancestorsOfA.filter((e) => sharedIdSet.has(e.id));
+
+    // Compute side from A's perspective (all shared ancestors on same side?)
+    const aSidesRaw = aMatchEntries.map((e) => e.side).filter((s): s is RelationshipSide => s !== null);
+    const aSides = new Set(aSidesRaw);
+    const aToBSide: RelationshipSide | null = aSides.size === 1 ? [...aSides][0] : null;
+
+    // Compute side from B's perspective
+    const bSidesRaw = sharedBEntries.map((e) => e.side).filter((s): s is RelationshipSide => s !== null);
+    const bSides = new Set(bSidesRaw);
+    const bToASide: RelationshipSide | null = bSides.size === 1 ? [...bSides][0] : null;
+
+    const aToBStr = aToBSide ? ` ${aToBSide.replace(/_/g, " ")}` : "";
+    const bToAStr = bToASide ? ` ${bToASide.replace(/_/g, " ")}` : "";
+
+    return {
+      aToB: lbl("saudara", `${baseLabel}${aToBStr}`, { degree, side: aToBSide }),
+      bToA: lbl("saudara", `${baseLabel}${bToAStr}`, { degree, side: bToASide }),
+    };
+  }
+
+  return null;
+}
+
+function pupuDegreeLabel(degree: number): string {
+  const names: Record<number, string> = {
+    1: "Sepupu",
+    2: "Dua Pupu",
+    3: "Tiga Pupu",
+    4: "Empat Pupu",
+  };
+  return names[degree] ?? `Pupu Darjah ${degree}`;
+}
+
 // ── Main API ──────────────────────────────────────────────────────────────────
 
 /**
@@ -334,10 +536,13 @@ export function getRelationships(
     bToALabels.push(pair.bToA);
   }
 
-  // Priority: blood first (parent → grandparent → sibling), then marriage
+  // Priority: blood first, then marriage. Closer relations listed before distant.
   add(detectParentChild(aId, bId, family));
   add(detectGrandparentGrandchild(aId, bId, family));
   add(detectSibling(aId, bId, family));
+  add(detectPakcikAnakSaudara(aId, bId, family));
+  add(detectDatukSaudaraCucuSaudara(aId, bId, family));
+  add(detectPupu(aId, bId, family));
   add(detectSpouse(aId, bId, family));
 
   if (aToBLabels.length === 0) return { aToB: [], bToA: [] };
