@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Modal,
   View,
@@ -6,19 +6,16 @@ import {
   TextInput,
   FlatList,
   Pressable,
-  KeyboardAvoidingView,
   Platform,
-  Dimensions,
   StyleSheet,
+  Keyboard,
+  useWindowDimensions,
 } from "react-native";
 import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 
-// 92% of screen: small gap at top lets user tap-to-dismiss; large enough for
-// the search bar to stay visible above the keyboard on all screen sizes.
-const SHEET_HEIGHT = Dimensions.get("window").height * 0.92;
 
 interface Props {
   value: string | null;
@@ -101,6 +98,22 @@ export function PersonSearchSelector({
     setQuery("");
   }, [controlled, onRequestClose]);
 
+  // On Android, useWindowDimensions shrinks automatically when keyboard opens (adjustResize).
+  // On iOS the window never shrinks, so we track keyboard height manually.
+  const { height: windowHeight } = useWindowDimensions();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    const show = Keyboard.addListener("keyboardWillShow", (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  const sheetHeight = Platform.OS === "ios"
+    ? Math.max(windowHeight * 0.92 - keyboardHeight, 300)
+    : windowHeight * 0.92;
+
   const sheet = (
     <Modal
       visible={modalVisible}
@@ -109,43 +122,24 @@ export function PersonSearchSelector({
       onRequestClose={handleClose}
       statusBarTranslucent
     >
-      {/*
-        Flex-column layout: backdrop (flex:1) sits above the sheet and
-        handles tap-to-dismiss. KAV gets a fixed height (SHEET_HEIGHT) so
-        React Native can compute how much to shrink when the keyboard appears.
-
-        iOS  — behavior="padding": KAV adds paddingBottom equal to keyboard
-               height, so the FlatList (flex:1) yields space upward.
-        Android — behavior="height": KAV reduces its own height, FlatList
-               (flex:1) shrinks with it. If content is still clipped after
-               a device-specific status-bar quirk, set keyboardVerticalOffset
-               to StatusBar.currentHeight.
-      */}
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        {/* Full-screen backdrop — absoluteFill so it doesn't participate in flex layout */}
         <Pressable
           onPress={handleClose}
           style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]}
         />
-
-        {/* Sheet — maxHeight so KAV can shrink below SHEET_HEIGHT when keyboard adjusts window */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ maxHeight: SHEET_HEIGHT }}
+        <View
+          style={{
+            height: sheetHeight,
+            backgroundColor: colors.background,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: -3 },
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            elevation: 12,
+          }}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: colors.background,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -3 },
-              shadowOpacity: 0.12,
-              shadowRadius: 8,
-              elevation: 12,
-            }}
-          >
             {/* Drag handle */}
             <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 6 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
@@ -278,8 +272,7 @@ export function PersonSearchSelector({
                 );
               }}
             />
-          </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );
