@@ -471,20 +471,20 @@ describe("getRelationships — Chunk 2 sideling labels", () => {
     expect(result.bToA[0].labelBm).toBe("Sepupu sebelah ibu");
   });
 
-  // ── Dua Pupu ─────────────────────────────────────────────────────────────
+  // ── Sepupu 2 Kali ────────────────────────────────────────────────────────
 
-  it("synthetic: sPersonA → sPersonB: Dua Pupu (degree 2)", () => {
+  it("synthetic: sPersonA → sPersonB: Sepupu 2 Kali (degree 2)", () => {
     // Shared great-grandparent sGreatGP at depth 3; no shared grandparent at depth 2
     const result = synResult("sPersonA", "sPersonB");
-    expect(result.aToB[0].labelBm).toMatch(/Dua Pupu/);
+    expect(result.aToB[0].labelBm).toMatch(/Sepupu 2 Kali/);
     expect(result.aToB[0].degree).toBe(2);
   });
 
-  it("synthetic: dua pupu is symmetric", () => {
+  it("synthetic: sepupu 2 kali is symmetric", () => {
     const ab = synResult("sPersonA", "sPersonB").aToB[0].labelBm;
     const ba = synResult("sPersonB", "sPersonA").aToB[0].labelBm;
-    expect(ab).toMatch(/Dua Pupu/);
-    expect(ba).toMatch(/Dua Pupu/);
+    expect(ab).toMatch(/Sepupu 2 Kali/);
+    expect(ba).toMatch(/Sepupu 2 Kali/);
   });
 
   // ── Negative / guard cases ────────────────────────────────────────────────

@@ -1,12 +1,11 @@
-import { Text, View, Pressable, ScrollView, Alert } from "react-native";
+import { Text, View, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useFamily } from "@/lib/family-store";
 import { useI18n } from "@/lib/i18n";
-import { exportFamilyTreePDF, printFamilyTree } from "@/lib/pdf-export";
-import { useState } from "react";
+
 
 interface ToolCardProps {
   title: string;
@@ -43,36 +42,7 @@ export default function ToolsScreen() {
   const colors = useColors();
   const { data } = useFamily();
   const { t } = useI18n();
-  const [exporting, setExporting] = useState(false);
-
   const muslimCount = data.persons.filter((p) => p.religion === "Islam").length;
-
-  const handleExportPDF = async () => {
-    if (data.persons.length === 0) {
-      Alert.alert("No Data", "Please add family members before exporting.");
-      return;
-    }
-    setExporting(true);
-    try {
-      await exportFamilyTreePDF(data);
-    } catch (e) {
-      Alert.alert("Export Failed", "Could not generate PDF. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handlePrint = async () => {
-    if (data.persons.length === 0) {
-      Alert.alert("No Data", "Please add family members before printing.");
-      return;
-    }
-    try {
-      await printFamilyTree(data);
-    } catch (e) {
-      Alert.alert("Print Failed", "Could not print. Please try again.");
-    }
-  };
 
   return (
     <ScreenContainer className="px-5 pt-2">
@@ -117,26 +87,6 @@ export default function ToolsScreen() {
             icon="list.bullet"
             color="#5856D6"
             onPress={() => router.push("/miller-columns" as any)}
-          />
-        </View>
-
-        {/* Export & Print Section */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{t("exportPrint")}</Text>
-        <View className="gap-3 mb-6">
-          <ToolCard
-            title={t("exportFamilyTreePDF")}
-            description={t("generatePrintableReport")}
-            icon="arrow.down.doc.fill"
-            color="#E65100"
-            onPress={handleExportPDF}
-            loading={exporting}
-          />
-          <ToolCard
-            title={t("printFamilyTree")}
-            description={t("printDirectly")}
-            icon="doc.text.fill"
-            color="#FF9500"
-            onPress={handlePrint}
           />
         </View>
 

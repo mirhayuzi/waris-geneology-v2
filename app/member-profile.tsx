@@ -114,7 +114,18 @@ export default function MemberProfileScreen() {
         : `Are you sure you want to remove ${getDisplayName(person)} from the family tree?`,
       [
         { text: t("cancel"), style: "cancel" },
-        { text: t("delete"), style: "destructive", onPress: () => { deletePerson(person.id); router.back(); } },
+        {
+          text: t("delete"),
+          style: "destructive",
+          onPress: () => {
+            const idToDelete = person.id;
+            // Navigate first — deletePerson is a sync state mutation that
+            // triggers an immediate re-render, which would crash this screen
+            // when it tries to render a person that no longer exists.
+            router.back();
+            setTimeout(() => deletePerson(idToDelete), 0);
+          },
+        },
       ]
     );
   };

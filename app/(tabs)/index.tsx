@@ -189,7 +189,7 @@ export default function HomeScreen() {
                   </View>
                 </Pressable>
                 <Pressable
-                  onPress={() => router.push("/faraid-calculator" as any)}
+                  onPress={() => router.push("/(tabs)/tools/faraid-calculator" as any)}
                   style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
                 >
                   <View className="bg-surface rounded-2xl p-4 border border-border items-center gap-2">

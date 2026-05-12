@@ -483,7 +483,7 @@ function detectDatukSaudaraCucuSaudara(
 }
 
 /**
- * Pupu (Sepupu / Dua Pupu / Tiga Pupu / Empat Pupu).
+ * Pupu (Sepupu / Sepupu 2 Kali / Sepupu 3 Kali / Sepupu 4 Kali).
  *
  * Algorithm: find the shallowest depth D (2–5) at which A and B share an
  * ancestor where both are at EQUAL depth from it. Degree = D - 1.
@@ -539,11 +539,11 @@ function detectPupu(
 function pupuDegreeLabel(degree: number): string {
   const names: Record<number, string> = {
     1: "Sepupu",
-    2: "Dua Pupu",
-    3: "Tiga Pupu",
-    4: "Empat Pupu",
+    2: "Sepupu 2 Kali",
+    3: "Sepupu 3 Kali",
+    4: "Sepupu 4 Kali",
   };
-  return names[degree] ?? `Pupu Darjah ${degree}`;
+  return names[degree] ?? `Sepupu ${degree} Kali`;
 }
 
 // ── Detection (Chunk 3: in-law + tiri labels) ────────────────────────────────
