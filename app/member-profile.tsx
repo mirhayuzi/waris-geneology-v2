@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Alert, FlatList } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert, FlatList, InteractionManager } from "react-native";
 import { Image } from "expo-image";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -119,11 +119,13 @@ export default function MemberProfileScreen() {
           style: "destructive",
           onPress: () => {
             const idToDelete = person.id;
-            // Navigate first — deletePerson is a sync state mutation that
-            // triggers an immediate re-render, which would crash this screen
-            // when it tries to render a person that no longer exists.
             router.back();
-            setTimeout(() => deletePerson(idToDelete), 0);
+            // Wait for the navigation transition to finish before mutating state —
+            // setTimeout(0) fires before the animation completes and can still
+            // trigger a re-render of this screen with a null person.
+            InteractionManager.runAfterInteractions(() => {
+              deletePerson(idToDelete);
+            });
           },
         },
       ]
