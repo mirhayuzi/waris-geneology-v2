@@ -55,6 +55,11 @@ const persons: Person[] = [
   person("anakL", "AnakL", "male"),
   person("anakP", "AnakP", "female"),
   person("stranger", "Stranger", "male"),
+  // Chunk 3 additions — Nisa's family for mertua / ipar / anak-tiri tests
+  person("nisaBapa", "NisaBapa", "male"),
+  person("nisaIbu", "NisaIbu", "female"),
+  person("nisaSibling", "NisaSibling", "female", { birthDate: "1993-01-01" }),
+  person("nisaAnakDahulu", "NisaAnakDahulu", "female"), // Nisa's child not Yuzi's
 ];
 
 const pc = (id: string, parentId: string, childId: string): ParentChild => ({
@@ -85,6 +90,12 @@ const parentChildren: ParentChild[] = [
   pc("pc18", "nisa", "anakL"),
   pc("pc19", "yuzi", "anakP"),
   pc("pc20", "nisa", "anakP"),
+  // Chunk 3 additions
+  pc("pc21", "nisaBapa", "nisa"),
+  pc("pc22", "nisaIbu", "nisa"),
+  pc("pc23", "nisaBapa", "nisaSibling"),
+  pc("pc24", "nisaIbu", "nisaSibling"),
+  pc("pc25", "nisa", "nisaAnakDahulu"),   // Nisa's child, NOT Yuzi's
 ];
 
 const m = (
@@ -105,6 +116,7 @@ const marriages: Marriage[] = [
   m("m3", "rejin", "tiajar"),
   m("m4", "sibil", "nenekIbu"),
   m("m5", "datukBapa", "nenekBapa"),
+  m("m6", "nisaBapa", "nisaIbu"),   // Nisa's parents — active marriage
 ];
 
 const family: FamilyData = {
@@ -226,18 +238,17 @@ describe("getRelationships — Chunk 1 direct labels", () => {
     expect(bToA("yuzi", "kakak")).toContain("Kakak");
   });
 
-  it("Yuzi → Adik (half-sibling seibu, adik younger): aToB=Abang, bToA=Adik", () => {
+  it("Yuzi → Adik (half-sibling seibu, adik younger): aToB=Abang Seibu, bToA=Adik Seibu", () => {
     // Adik born 1995, Yuzi born 1990 → Yuzi is older
-    // aToB: Yuzi (older male) is Adik's "Abang"
-    // bToA: Adik (younger) is Yuzi's "Adik"
-    expect(aToB("yuzi", "adik")).toContain("Abang");
-    expect(bToA("yuzi", "adik")).toContain("Adik");
+    // Shared parent = Tiajar (female) → Seibu qualifier
+    expect(aToB("yuzi", "adik")).toContain("Abang Seibu");
+    expect(bToA("yuzi", "adik")).toContain("Adik Seibu");
   });
 
-  it("Kakak → Adik (full vs half): both detected as siblings (shared parent Tiajar)", () => {
-    // Kakak and Adik share Tiajar → siblings
-    const labels = aToB("kakak", "adik");
-    expect(labels.some((l) => ["Kakak", "Abang", "Adik", "Adik-beradik"].includes(l))).toBe(true);
+  it("Kakak → Adik (seibu: shared parent Tiajar only): Kakak Seibu", () => {
+    // Kakak (1985) older than Adik (1995); shared parent = Tiajar (female) → Seibu qualifier
+    expect(aToB("kakak", "adik")).toContain("Kakak Seibu");
+    expect(bToA("kakak", "adik")).toContain("Adik Seibu");
   });
 
   it("half-sibling detected regardless of shared-parent count (Yuzi+Adik share 1 parent)", () => {
@@ -497,6 +508,256 @@ describe("getRelationships — Chunk 2 sideling labels", () => {
     // Neither is a sibling of the other's parent (Sibil has no parents in fixture)
     const labels = aToB("pakcik", "tiajar");
     expect(labels).not.toContain("Pakcik sebelah ibu");
-    expect(labels).toContain("Adik-beradik"); // they're siblings
+    expect(labels).toContain("Adik-beradik"); // they're siblings (penuh — both parents shared)
+  });
+});
+
+// ─── Chunk 3: in-law + tiri synthetic fixtures ────────────────────────────────
+//
+// BIRAS: birasX married birasSisA; birasY married birasSisB;
+//        birasSisA and birasSisB are sisters (share birasParent).
+//        → birasX and birasY are biras (3-hop via birasSisB / birasSisA).
+//
+// BESAN: besanA → besanChild ─(married)─ besanChildSpouse ← besanB
+//        → besanA and besanB are besan.
+//
+// IPAR SAUDARA: iparGrandP → {iparParent, iparUncle};
+//               iparParent → iparSpouse; iparUncle → iparCousin;
+//               iparSubject married iparSpouse.
+//               → iparSubject and iparCousin are ipar saudara (spouse's first cousin).
+//
+// STEP-SIBLING: stepBapa married stepIbu (active);
+//               stepBapa → stepChildA; stepIbu → stepChildB.
+//               → stepChildA and stepChildB are adik-beradik tiri.
+
+const c3Persons: Person[] = [
+  // Biras
+  person("birasX",      "BirasX",      "male"),
+  person("birasY",      "BirasY",      "male"),
+  person("birasSisA",   "BirasSisA",   "female"),
+  person("birasSisB",   "BirasSisB",   "female"),
+  person("birasParent", "BirasParent", "female"),
+  // Besan
+  person("besanA",           "BesanA",           "male"),
+  person("besanChild",       "BesanChild",       "male"),
+  person("besanChildSpouse", "BesanChildSpouse", "female"),
+  person("besanB",           "BesanB",           "female"),
+  // Ipar Saudara
+  person("iparSubject", "IparSubject", "male"),
+  person("iparSpouse",  "IparSpouse",  "female"),
+  person("iparGrandP",  "IparGrandP",  "male"),
+  person("iparParent",  "IparParent",  "male"),
+  person("iparUncle",   "IparUncle",   "male"),
+  person("iparCousin",  "IparCousin",  "female"),
+  // Step-sibling
+  person("stepBapa",   "StepBapa",   "male"),
+  person("stepIbu",    "StepIbu",    "female"),
+  person("stepChildA", "StepChildA", "male"),
+  person("stepChildB", "StepChildB", "female"),
+];
+
+const c3Pc: ParentChild[] = [
+  pc("c3p1",  "birasParent", "birasSisA"),
+  pc("c3p2",  "birasParent", "birasSisB"),
+  pc("c3p3",  "besanA",      "besanChild"),
+  pc("c3p4",  "besanB",      "besanChildSpouse"),
+  pc("c3p5",  "iparGrandP",  "iparParent"),
+  pc("c3p6",  "iparGrandP",  "iparUncle"),
+  pc("c3p7",  "iparParent",  "iparSpouse"),
+  pc("c3p8",  "iparUncle",   "iparCousin"),
+  pc("c3p9",  "stepBapa",    "stepChildA"),
+  pc("c3p10", "stepIbu",     "stepChildB"),
+];
+
+const c3Marriages: Marriage[] = [
+  m("c3m1", "birasX",      "birasSisA"),
+  m("c3m2", "birasY",      "birasSisB"),
+  m("c3m3", "besanChild",  "besanChildSpouse"),
+  m("c3m4", "iparSubject", "iparSpouse"),
+  m("c3m5", "stepBapa",    "stepIbu"),
+];
+
+const c3Family: FamilyData = {
+  persons:        c3Persons,
+  marriages:      c3Marriages,
+  parentChildren: c3Pc,
+  collaborators:  [],
+  familyName:     "Chunk3Synthetic",
+  createdAt:      "",
+  updatedAt:      "",
+};
+
+function c3AtoB(aId: string, bId: string) {
+  return getRelationships(aId, bId, c3Family).aToB.map((l) => l.labelBm);
+}
+function c3BtoA(aId: string, bId: string) {
+  return getRelationships(aId, bId, c3Family).bToA.map((l) => l.labelBm);
+}
+function c3Result(aId: string, bId: string) {
+  return getRelationships(aId, bId, c3Family);
+}
+
+// ─── Chunk 3: in-law + tiri label tests ──────────────────────────────────────
+
+describe("getRelationships — Chunk 3 in-law + tiri labels", () => {
+  // ── Mertua ────────────────────────────────────────────────────────────────
+
+  it("Yuzi → nisaBapa (bapa mertua): aToB=Menantu Lelaki, bToA=Bapa Mertua", () => {
+    expect(aToB("yuzi", "nisaBapa")).toContain("Menantu Lelaki");
+    expect(bToA("yuzi", "nisaBapa")).toContain("Bapa Mertua");
+  });
+
+  it("Yuzi → nisaIbu (ibu mertua): aToB=Menantu Lelaki, bToA=Ibu Mertua", () => {
+    expect(aToB("yuzi", "nisaIbu")).toContain("Menantu Lelaki");
+    expect(bToA("yuzi", "nisaIbu")).toContain("Ibu Mertua");
+  });
+
+  it("nisaBapa → Yuzi (reverse): aToB=Bapa Mertua, bToA=Menantu Lelaki", () => {
+    expect(aToB("nisaBapa", "yuzi")).toContain("Bapa Mertua");
+    expect(bToA("nisaBapa", "yuzi")).toContain("Menantu Lelaki");
+  });
+
+  it("mertua label has category perkahwinan", () => {
+    const result = getRelationships("yuzi", "nisaBapa", family);
+    expect(result.bToA.find((l) => l.labelBm === "Bapa Mertua")?.category).toBe("perkahwinan");
+  });
+
+  // ── Ipar ─────────────────────────────────────────────────────────────────
+
+  it("Yuzi → nisaSibling (adik ipar, via Nisa's sibling pathway): aToB=Adik Ipar, bToA=Abang Ipar", () => {
+    // nisaSibling born 1993, Yuzi born 1990 → nisaSibling is younger than Yuzi
+    expect(aToB("yuzi", "nisaSibling")).toContain("Adik Ipar");
+    expect(bToA("yuzi", "nisaSibling")).toContain("Abang Ipar");
+  });
+
+  it("ipar label has category perkahwinan", () => {
+    const result = getRelationships("yuzi", "nisaSibling", family);
+    expect(result.aToB[0].category).toBe("perkahwinan");
+  });
+
+  // ── Sibling seibu qualifier (refined from Chunk 1) ───────────────────────
+
+  it("Yuzi → Adik (seibu): label includes Seibu qualifier since they share only Tiajar", () => {
+    expect(aToB("yuzi", "adik")).toContain("Abang Seibu");
+    expect(bToA("yuzi", "adik")).toContain("Adik Seibu");
+  });
+
+  it("Yuzi → Adik: NOT step-sibling (they share bio parent Tiajar)", () => {
+    expect(aToB("yuzi", "adik")).not.toContain("Adik-beradik Tiri");
+    expect(aToB("yuzi", "adik")).not.toContain("Adik Tiri");
+  });
+
+  it("Yuzi → Kakak (penuh): no qualifier — share both Mohd and Tiajar", () => {
+    // Full siblings get no suffix: "Adik" not "Adik Seibu"
+    expect(aToB("yuzi", "kakak")).toContain("Adik");
+    expect(aToB("yuzi", "kakak")).not.toContain("Adik Seibu");
+    expect(aToB("yuzi", "kakak")).not.toContain("Adik Sebapa");
+  });
+
+  // ── Step-parent (tiri) ────────────────────────────────────────────────────
+
+  it("Yuzi → Rejin (bapa tiri): Rejin is Tiajar's active husband, not Yuzi's bio-parent", () => {
+    expect(aToB("yuzi", "rejin")).toContain("Anak Tiri Lelaki");
+    expect(bToA("yuzi", "rejin")).toContain("Bapa Tiri");
+  });
+
+  it("bapa tiri label has category tiri", () => {
+    const result = getRelationships("yuzi", "rejin", family);
+    expect(result.bToA.find((l) => l.labelBm === "Bapa Tiri")?.category).toBe("tiri");
+  });
+
+  it("Yuzi → Mohd (bio-bapa): bio parent is NOT labelled bapa tiri", () => {
+    expect(bToA("yuzi", "mohd")).toContain("Bapa");
+    expect(bToA("yuzi", "mohd")).not.toContain("Bapa Tiri");
+  });
+
+  // ── Anak tiri ─────────────────────────────────────────────────────────────
+
+  it("Yuzi → nisaAnakDahulu (anak tiri): Nisa's child who is NOT Yuzi's biological child", () => {
+    expect(aToB("yuzi", "nisaAnakDahulu")).toContain("Bapa Tiri");
+    expect(bToA("yuzi", "nisaAnakDahulu")).toContain("Anak Tiri Perempuan");
+  });
+
+  it("Yuzi → AnakL (bio child): NOT labelled anak tiri", () => {
+    expect(aToB("yuzi", "anakL")).toContain("Bapa");
+    expect(aToB("yuzi", "anakL")).not.toContain("Bapa Tiri");
+  });
+
+  // ── Synthetic: step-sibling (adik-beradik tiri) ───────────────────────────
+
+  it("synthetic: stepChildA ↔ stepChildB: Adik-beradik Tiri (no shared bio parent, parents married)", () => {
+    expect(c3AtoB("stepChildA", "stepChildB")).toContain("Adik-beradik Tiri");
+    expect(c3BtoA("stepChildA", "stepChildB")).toContain("Adik-beradik Tiri");
+  });
+
+  it("synthetic: step-sibling label has category tiri", () => {
+    const result = c3Result("stepChildA", "stepChildB");
+    expect(result.aToB[0].category).toBe("tiri");
+  });
+
+  // ── Synthetic: biras ──────────────────────────────────────────────────────
+
+  it("synthetic: birasX → birasY: Biras, via=birasSisB", () => {
+    const result = c3Result("birasX", "birasY");
+    expect(result.aToB.map((l) => l.labelBm)).toContain("Biras");
+    expect(result.aToB.find((l) => l.labelBm === "Biras")?.via).toBe("birasSisB");
+  });
+
+  it("synthetic: biras symmetric (birasY → birasX), via=birasSisA", () => {
+    const result = c3Result("birasY", "birasX");
+    expect(result.aToB.map((l) => l.labelBm)).toContain("Biras");
+    expect(result.aToB.find((l) => l.labelBm === "Biras")?.via).toBe("birasSisA");
+  });
+
+  it("synthetic: biras category is perkahwinan", () => {
+    const result = c3Result("birasX", "birasY");
+    expect(result.aToB.find((l) => l.labelBm === "Biras")?.category).toBe("perkahwinan");
+  });
+
+  // ── Synthetic: besan ──────────────────────────────────────────────────────
+
+  it("synthetic: besanA → besanB: Besan (child's spouse's parent), via=besanChild", () => {
+    const result = c3Result("besanA", "besanB");
+    expect(result.aToB.map((l) => l.labelBm)).toContain("Besan");
+    expect(result.aToB.find((l) => l.labelBm === "Besan")?.via).toBe("besanChild");
+  });
+
+  it("synthetic: besan symmetric (besanB → besanA)", () => {
+    expect(c3AtoB("besanB", "besanA")).toContain("Besan");
+  });
+
+  it("synthetic: besan category is perkahwinan", () => {
+    const result = c3Result("besanA", "besanB");
+    expect(result.aToB.find((l) => l.labelBm === "Besan")?.category).toBe("perkahwinan");
+  });
+
+  // ── Synthetic: ipar saudara ───────────────────────────────────────────────
+
+  it("synthetic: iparSubject → iparCousin: Ipar Saudara (spouse's first cousin)", () => {
+    expect(c3AtoB("iparSubject", "iparCousin")).toContain("Ipar Saudara");
+    expect(c3BtoA("iparSubject", "iparCousin")).toContain("Ipar Saudara");
+  });
+
+  it("synthetic: ipar saudara symmetric (iparCousin → iparSubject via cousin's-spouse pathway)", () => {
+    expect(c3AtoB("iparCousin", "iparSubject")).toContain("Ipar Saudara");
+  });
+
+  // ── Negative cases ────────────────────────────────────────────────────────
+
+  it("Yuzi → Nisa: Suami only — no mertua, tiri, or ipar labels", () => {
+    const labels = aToB("yuzi", "nisa");
+    expect(labels).toContain("Suami");
+    expect(labels).not.toContain("Bapa Mertua");
+    expect(labels).not.toContain("Ibu Mertua");
+    expect(labels).not.toContain("Bapa Tiri");
+    expect(labels).not.toContain("Anak Tiri Lelaki");
+    expect(labels).not.toContain("Adik-beradik Tiri");
+  });
+
+  it("Yuzi → AnakL: bio-parent Bapa — not step-parent and not menantu", () => {
+    const labels = aToB("yuzi", "anakL");
+    expect(labels).toContain("Bapa");
+    expect(labels).not.toContain("Bapa Tiri");
+    expect(labels).not.toContain("Bapa Mertua");
   });
 });
