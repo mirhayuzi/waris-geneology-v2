@@ -105,7 +105,8 @@ export async function nativeGoogleSignIn(): Promise<GoogleUser | null> {
 
 /**
  * Get a valid access token from the native Google Sign-In.
- * The native module handles token refresh automatically.
+ * Skips the synchronous getCurrentUser() guard (unreliable after app restart)
+ * and falls back to signInSilently() to restore a Play Services session.
  */
 export async function getAccessToken(): Promise<string | null> {
   if (!GoogleSigninModule || Platform.OS === "web") return null;
@@ -113,24 +114,15 @@ export async function getAccessToken(): Promise<string | null> {
   const { GoogleSignin } = GoogleSigninModule;
 
   try {
-    // Check if user is signed in
-    const currentUser = GoogleSignin.getCurrentUser();
-    if (!currentUser) return null;
-
-    // getTokens() returns fresh tokens (auto-refreshed if expired)
+    // getTokens() handles automatic refresh via Play Services
     const tokens = await GoogleSignin.getTokens();
     return tokens.accessToken || null;
-  } catch (e) {
-    console.error("getAccessToken error:", e);
-
-    // Try to clear cached token and retry once
+  } catch {
+    // In-memory session lost (e.g. app restart). Attempt silent restore.
     try {
+      await GoogleSignin.signInSilently();
       const tokens = await GoogleSignin.getTokens();
-      if (tokens.accessToken) {
-        await GoogleSignin.clearCachedAccessToken(tokens.accessToken);
-      }
-      const freshTokens = await GoogleSignin.getTokens();
-      return freshTokens.accessToken || null;
+      return tokens.accessToken || null;
     } catch {
       return null;
     }
@@ -145,14 +137,29 @@ async function storeUser(user: GoogleUser): Promise<void> {
 }
 
 /**
- * Get stored user info
+ * Get stored user info.
+ * On native: tries getCurrentUser() first (fast path), then signInSilently()
+ * to restore a session lost after app restart. If the native session is
+ * definitively gone, clears stale AsyncStorage to avoid phantom "Signed In" UI.
  */
 export async function getStoredUser(): Promise<GoogleUser | null> {
   try {
-    // First check native sign-in state
     if (GoogleSigninModule && Platform.OS !== "web") {
       const { GoogleSignin } = GoogleSigninModule;
-      const currentUser = GoogleSignin.getCurrentUser();
+
+      // Fast path: in-memory session still alive
+      let currentUser = GoogleSignin.getCurrentUser();
+
+      // Session lost after app restart — try silent restore before giving up
+      if (!currentUser && GoogleSignin.hasPreviousSignIn()) {
+        try {
+          await GoogleSignin.signInSilently();
+          currentUser = GoogleSignin.getCurrentUser();
+        } catch {
+          // Can't restore silently; user must sign in manually
+        }
+      }
+
       if (currentUser) {
         const user: GoogleUser = {
           name: currentUser.user?.name || currentUser.user?.email || "User",
@@ -162,9 +169,13 @@ export async function getStoredUser(): Promise<GoogleUser | null> {
         await storeUser(user);
         return user;
       }
+
+      // Native session definitively gone — clear stale cache to prevent phantom UI
+      await AsyncStorage.removeItem(GOOGLE_USER_KEY);
+      return null;
     }
 
-    // Fallback to AsyncStorage
+    // Web or module unavailable — fall back to AsyncStorage
     const value = await AsyncStorage.getItem(GOOGLE_USER_KEY);
     if (!value) return null;
     return JSON.parse(value) as GoogleUser;
