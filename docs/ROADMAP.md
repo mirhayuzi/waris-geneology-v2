@@ -25,7 +25,7 @@
 | 1.5E.1 | Search picker everywhere + PDF marriage grouping | ✅ |
 | 1.5E.2 | Keyboard overlap fix (search results visible) | ✅ |
 | 1.5D | Full relationship taxonomy (33 labels, 70 tests, dual-perspective UI) | ✅ |
-| 1.5F | 4 production bug fixes (delete crash, pupu rename, redundant tools, Faraid home route) | 🚧 In progress |
+| 1.5F | 4 production bug fixes (delete crash, pupu rename, redundant tools, Faraid home route) | ✅ |
 
 ---
 
@@ -38,7 +38,7 @@
 - [ ] Privacy Policy (BM + EN) — host on GitHub Pages or similar
 - [ ] Terms of Service (BM + EN)
 - [ ] Google OAuth verification — publish OAuth app, exit Testing Mode
-- [ ] **Fix Google Drive sync token error** (critical — local-only means backup is the only safety net)
+- [~] **Fix Google Drive sync token error** — partial fix shipped (commit 22f53e7) addressing session-restoration bug after app restart. Pending real-world verification that no separate OAuth/refresh-token issue remains. Re-open if sync fails again in normal use.
 - [ ] Crash reporting setup (Sentry free tier)
 - [ ] Production EAS build profile (separate from preview)
 - [ ] App icon finalization (1024×1024 + adaptive)
@@ -201,3 +201,4 @@ The April 2026 improvement pack was prepared assuming a different product direct
 ## Document History
 
 - **2026-05-12**: Initial roadmap created after Phase 1.5F. Synthesizes April 2026 improvement pack with locked product decisions.
+- **2026-05-13**: Drive sync session-restoration fix shipped (22f53e7). Item marked partial pending real-world verification.
