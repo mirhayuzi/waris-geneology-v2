@@ -66,7 +66,7 @@ async function startServer() {
   // then redirects to the app's custom scheme with the tokens.
   app.get("/api/google/callback", async (req, res) => {
     const { code, error } = req.query;
-    const appScheme = "manus20260312144942";
+    const appScheme = "warisgenealogy";
 
     if (error) {
       res.redirect(`${appScheme}://google-callback?error=${encodeURIComponent(String(error))}`);
