@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
+import { formatDate } from "@/lib/dates";
 import { useMemo } from "react";
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
@@ -86,7 +87,7 @@ export default function MemberProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const { getPersonById, getParents, getChildren, getSpouses, getSiblings, deletePerson, data, setRootPerson } = useFamily();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
 
   const person = getPersonById(id || "");
 
@@ -134,7 +135,7 @@ export default function MemberProfileScreen() {
 
   const isRoot = data.rootPersonId === person.id;
   const statusLabel = (p: Person) => (p.isAlive ? t("living") : t("deceased"));
-  const personSubtitle = (p: Person) => statusLabel(p) + (p.birthDate ? ` · ${p.birthDate}` : "");
+  const personSubtitle = (p: Person) => statusLabel(p) + (p.birthDate ? ` · ${formatDate(p.birthDate, lang)}` : "");
 
   const groups: { label: string; persons: Person[] }[] = [
     { label: t("parents"), persons: family.parents },
@@ -249,9 +250,9 @@ export default function MemberProfileScreen() {
         <View className="bg-surface rounded-2xl px-4 border border-border mb-2">
           <InfoRow label={t("prefix")} value={person.prefix} />
           <InfoRow label={t("gender")} value={person.gender === "male" ? t("male") : t("female")} />
-          <InfoRow label={t("dateOfBirth")} value={person.birthDate} />
+          <InfoRow label={t("dateOfBirth")} value={formatDate(person.birthDate, lang)} />
           <InfoRow label={t("placeOfBirth")} value={person.birthPlace} />
-          {!person.isAlive && <InfoRow label={t("dateOfDeath")} value={person.deathDate} />}
+          {!person.isAlive && <InfoRow label={t("dateOfDeath")} value={formatDate(person.deathDate, lang)} />}
           <InfoRow label={t("ethnicity")} value={person.race} />
           <InfoRow label={t("religion")} value={person.religion} />
         </View>

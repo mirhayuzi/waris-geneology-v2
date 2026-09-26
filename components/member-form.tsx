@@ -4,6 +4,7 @@ import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Gender, Religion, PREFIXES, ETHNICITIES, RELIGIONS, Person, getDisplayName } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
+import { MONTH_NAMES, formatDate, parseDate } from "@/lib/dates";
 import { useState, useCallback } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -137,12 +138,7 @@ export function DropdownSelector({ label, options, selected, onSelect, placehold
 
 // ---- Date Picker ----
 
-const MONTHS = {
-  en: ["January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"],
-  bm: ["Januari", "Februari", "Mac", "April", "Mei", "Jun",
-    "Julai", "Ogos", "September", "Oktober", "November", "Disember"],
-};
+const MIN_YEAR = 1000;
 
 export function DatePickerField({ label, value, onChange }: {
   label: string;
@@ -152,24 +148,38 @@ export function DatePickerField({ label, value, onChange }: {
   const colors = useColors();
   const { t, lang } = useI18n();
   const [visible, setVisible] = useState(false);
+  const thisYear = new Date().getFullYear();
 
-  // Parse existing value
-  const parsed = value ? parseDateString(value) : null;
-  const [selYear, setSelYear] = useState(parsed?.year || new Date().getFullYear());
-  const [selMonth, setSelMonth] = useState(parsed?.month || 1);
-  const [selDay, setSelDay] = useState(parsed?.day || 1);
+  const [yearOnly, setYearOnly] = useState(false);
+  const [yearText, setYearText] = useState("");
+  const [selMonth, setSelMonth] = useState(1);
+  const [selDay, setSelDay] = useState(1);
 
-  const years: number[] = [];
-  for (let y = new Date().getFullYear(); y >= 1900; y--) years.push(y);
+  // Load the current value every time the picker opens
+  const open = () => {
+    const parsed = value ? parseDate(value) : null;
+    setYearOnly(!!parsed && parsed.month === undefined);
+    setYearText(String(parsed?.year ?? thisYear));
+    setSelMonth(parsed?.month ?? 1);
+    setSelDay(parsed?.day ?? 1);
+    setVisible(true);
+  };
 
-  const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+  const year = parseInt(yearText, 10);
+  const yearValid = /^\d{4}$/.test(yearText) && year >= MIN_YEAR && year <= thisYear;
+  const daysInMonth = new Date(yearValid ? year : 2000, selMonth, 0).getDate();
   const days: number[] = [];
   for (let d = 1; d <= daysInMonth; d++) days.push(d);
 
   const handleConfirm = () => {
-    const mm = String(selMonth).padStart(2, "0");
-    const dd = String(Math.min(selDay, daysInMonth)).padStart(2, "0");
-    onChange(`${selYear}-${mm}-${dd}`);
+    if (!yearValid) return;
+    if (yearOnly) {
+      onChange(String(year));
+    } else {
+      const mm = String(selMonth).padStart(2, "0");
+      const dd = String(Math.min(selDay, daysInMonth)).padStart(2, "0");
+      onChange(`${year}-${mm}-${dd}`);
+    }
     setVisible(false);
   };
 
@@ -178,19 +188,27 @@ export function DatePickerField({ label, value, onChange }: {
     setVisible(false);
   };
 
+  const listItem = (key: string | number, text: string, active: boolean, onPress: () => void) => (
+    <Pressable key={key} onPress={onPress}>
+      <View className="py-2 rounded-lg items-center" style={{ backgroundColor: active ? colors.primary + "20" : "transparent" }}>
+        <Text className="text-sm font-medium" style={{ color: active ? colors.primary : colors.foreground }}>{text}</Text>
+      </View>
+    </Pressable>
+  );
+
   return (
     <>
       <FormLabel text={label} />
-      <Pressable onPress={() => setVisible(true)} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
+      <Pressable onPress={open} style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}>
         <View className="bg-surface border border-border rounded-xl px-4 py-3 mb-4 flex-row items-center justify-between">
           <Text className="text-sm" style={{ color: value ? colors.foreground : colors.muted }}>
-            {value || t("tapToSelectDate")}
+            {value ? formatDate(value, lang) : t("tapToSelectDate")}
           </Text>
           <IconSymbol name="calendar" size={16} color={colors.muted} />
         </View>
       </Pressable>
 
-      <Modal visible={visible} transparent animationType="slide">
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
         <Pressable
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}
           onPress={() => setVisible(false)}
@@ -202,65 +220,77 @@ export function DatePickerField({ label, value, onChange }: {
               </View>
               <Text className="text-base font-semibold text-foreground px-5 mb-4">{label}</Text>
 
-              {/* Year / Month / Day selectors */}
-              <View className="flex-row px-5 gap-2 mb-4">
-                {/* Day */}
-                <View className="flex-1">
-                  <Text className="text-xs text-muted mb-1 text-center">{t("day")}</Text>
-                  <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
-                    {days.map((d) => (
-                      <Pressable key={d} onPress={() => setSelDay(d)}>
-                        <View
-                          className="py-2 rounded-lg items-center"
-                          style={{ backgroundColor: selDay === d ? colors.primary + "20" : "transparent" }}
-                        >
-                          <Text className="text-sm font-medium" style={{ color: selDay === d ? colors.primary : colors.foreground }}>
-                            {d}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* Month */}
-                <View className="flex-[2]">
-                  <Text className="text-xs text-muted mb-1 text-center">{t("month")}</Text>
-                  <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
-                    {MONTHS[lang].map((m, idx) => (
-                      <Pressable key={m} onPress={() => setSelMonth(idx + 1)}>
-                        <View
-                          className="py-2 rounded-lg items-center"
-                          style={{ backgroundColor: selMonth === idx + 1 ? colors.primary + "20" : "transparent" }}
-                        >
-                          <Text className="text-sm font-medium" style={{ color: selMonth === idx + 1 ? colors.primary : colors.foreground }}>
-                            {m}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* Year */}
-                <View className="flex-1">
-                  <Text className="text-xs text-muted mb-1 text-center">{t("year")}</Text>
-                  <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
-                    {years.map((y) => (
-                      <Pressable key={y} onPress={() => setSelYear(y)}>
-                        <View
-                          className="py-2 rounded-lg items-center"
-                          style={{ backgroundColor: selYear === y ? colors.primary + "20" : "transparent" }}
-                        >
-                          <Text className="text-sm font-medium" style={{ color: selYear === y ? colors.primary : colors.foreground }}>
-                            {y}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
+              {/* Exact date / Year only */}
+              <View className="flex-row mx-5 mb-4 bg-surface rounded-xl p-1 border border-border">
+                {[false, true].map((yo) => (
+                  <Pressable key={String(yo)} onPress={() => setYearOnly(yo)} style={{ flex: 1 }}>
+                    <View className="py-2 rounded-lg items-center" style={{ backgroundColor: yearOnly === yo ? colors.primary : "transparent" }}>
+                      <Text className="text-sm font-medium" style={{ color: yearOnly === yo ? "#fff" : colors.foreground }}>
+                        {yo ? t("yearOnly") : t("exactDate")}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
               </View>
+
+              {/* Year: typed, much faster than scrolling through a long list */}
+              <View className="px-5 mb-4">
+                <Text className="text-xs text-muted mb-1">{t("year")}</Text>
+                <View className="flex-row items-center gap-2">
+                  <Pressable
+                    onPress={() => setYearText(String((yearValid ? year : thisYear) - 1))}
+                    hitSlop={6}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <View className="w-11 h-11 rounded-xl border border-border items-center justify-center">
+                      <IconSymbol name="minus" size={18} color={colors.foreground} />
+                    </View>
+                  </Pressable>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <TextInput
+                      value={yearText}
+                      onChangeText={(v) => setYearText(v.replace(/[^0-9]/g, "").slice(0, 4))}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      selectTextOnFocus
+                      className="bg-surface border rounded-xl px-4 py-2.5 text-lg font-semibold text-center"
+                      style={{ width: "100%", color: colors.foreground, borderColor: yearValid ? colors.border : colors.error }}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => setYearText(String(Math.min(thisYear, (yearValid ? year : thisYear) + 1)))}
+                    hitSlop={6}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <View className="w-11 h-11 rounded-xl border border-border items-center justify-center">
+                      <IconSymbol name="plus" size={18} color={colors.foreground} />
+                    </View>
+                  </Pressable>
+                </View>
+                {!yearValid && (
+                  <Text className="text-xs mt-1" style={{ color: colors.error }}>
+                    {t("enterValidYear")} ({MIN_YEAR}–{thisYear})
+                  </Text>
+                )}
+              </View>
+
+              {/* Day / Month */}
+              {!yearOnly && (
+                <View className="flex-row px-5 gap-2 mb-4">
+                  <View className="flex-1">
+                    <Text className="text-xs text-muted mb-1 text-center">{t("day")}</Text>
+                    <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
+                      {days.map((d) => listItem(d, String(d), selDay === d, () => setSelDay(d)))}
+                    </ScrollView>
+                  </View>
+                  <View className="flex-[2]">
+                    <Text className="text-xs text-muted mb-1 text-center">{t("month")}</Text>
+                    <ScrollView style={{ height: 150 }} showsVerticalScrollIndicator={false}>
+                      {MONTH_NAMES[lang].map((m, idx) => listItem(m, m, selMonth === idx + 1, () => setSelMonth(idx + 1)))}
+                    </ScrollView>
+                  </View>
+                </View>
+              )}
 
               {/* Buttons */}
               <View className="flex-row px-5 gap-3">
@@ -269,7 +299,7 @@ export function DatePickerField({ label, value, onChange }: {
                     <Text className="text-sm font-medium text-muted">{t("clear")}</Text>
                   </View>
                 </Pressable>
-                <Pressable onPress={handleConfirm} style={({ pressed }) => [{ flex: 2, opacity: pressed ? 0.8 : 1 }]}>
+                <Pressable onPress={handleConfirm} style={({ pressed }) => [{ flex: 2, opacity: !yearValid ? 0.5 : pressed ? 0.8 : 1 }]}>
                   <View className="py-3 rounded-xl bg-primary items-center">
                     <Text className="text-sm font-semibold text-white">{t("confirm")}</Text>
                   </View>
@@ -281,14 +311,6 @@ export function DatePickerField({ label, value, onChange }: {
       </Modal>
     </>
   );
-}
-
-function parseDateString(s: string): { year: number; month: number; day: number } | null {
-  const parts = s.split("-");
-  if (parts.length === 3) {
-    return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10), day: parseInt(parts[2], 10) };
-  }
-  return null;
 }
 
 // ---- Photo Picker (Using DocumentPicker - no native ImagePicker dependency) ----

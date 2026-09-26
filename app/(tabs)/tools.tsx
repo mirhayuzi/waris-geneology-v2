@@ -140,7 +140,7 @@ export default function ToolsScreen() {
         </View>
 
         {/* Info Card */}
-        <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20">
+        <View className="rounded-2xl p-4 border" style={{ backgroundColor: colors.primary + "12", borderColor: colors.primary + "33" }}>
           <View className="flex-row items-start gap-3">
             <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
             <View className="flex-1">

@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Alert, TextInput, Platform, ActivityIndicator } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert, TextInput, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -80,11 +80,11 @@ export default function SettingsScreen() {
   const handleReset = () => {
     Alert.alert(
       t("resetAllData"),
-      lang === "bm"
-        ? "Ini akan memadam semua ahli keluarga dan hubungan secara kekal. Tindakan ini tidak boleh dibatalkan."
-        : "This will permanently delete all family members and relationships. This action cannot be undone.",
+      t("resetWarning"),
       [
         { text: t("cancel"), style: "cancel" },
+        // Give people an easy way to save their tree before it is gone for good
+        { text: t("backupFirst"), onPress: () => router.push("/backup-restore" as any) },
         { text: t("delete"), style: "destructive", onPress: () => resetData() },
       ]
     );

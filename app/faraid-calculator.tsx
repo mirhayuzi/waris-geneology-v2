@@ -1,4 +1,4 @@
-import { Text, View, Pressable, ScrollView, Alert, TextInput } from "react-native";
+import { Text, View, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -7,9 +7,13 @@ import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useState, useMemo } from "react";
 import { exportFaraidPDF } from "@/lib/pdf-export";
+import { useI18n, TranslationKey } from "@/lib/i18n";
+
+type HeirKind = "wife" | "husband" | "father" | "mother" | "son" | "daughter";
 
 interface HeirShare {
   person: Person;
+  kind: HeirKind;
   relation: string;
   fraction: string;
   percentage: number;
@@ -22,6 +26,7 @@ function calculateFaraid(
   getSpouses: (id: string) => Person[],
   getChildren: (id: string) => Person[],
   getParents: (id: string) => Person[],
+  t: (key: TranslationKey) => string,
 ): HeirShare[] {
   const heirs: HeirShare[] = [];
   const colors = ["#1B6B4A", "#C8963E", "#5856D6", "#FF9500", "#34C759", "#FF3B30", "#007AFF", "#AF52DE"];
@@ -42,21 +47,21 @@ function calculateFaraid(
       // Wife gets 1/8 if children, 1/4 if no children
       const fraction = hasChildren ? "1/8" : "1/4";
       const pct = hasChildren ? 12.5 : 25;
-      heirs.push({ person: spouse, relation: "Wife (Isteri)", fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
+      heirs.push({ person: spouse, kind: "wife", relation: t("wife"), fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
     } else {
       // Husband gets 1/4 if children, 1/2 if no children
       const fraction = hasChildren ? "1/4" : "1/2";
       const pct = hasChildren ? 25 : 50;
-      heirs.push({ person: spouse, relation: "Husband (Suami)", fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
+      heirs.push({ person: spouse, kind: "husband", relation: t("husband"), fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
     }
   }
 
   // Father share
   if (father) {
     if (hasChildren) {
-      heirs.push({ person: father, relation: "Father (Bapa)", fraction: "1/6", percentage: 16.67, color: colors[colorIdx++ % colors.length] });
+      heirs.push({ person: father, kind: "father", relation: t("father"), fraction: "1/6", percentage: 16.67, color: colors[colorIdx++ % colors.length] });
     } else {
-      heirs.push({ person: father, relation: "Father (Bapa)", fraction: "Residual (Asabah)", percentage: 0, color: colors[colorIdx++ % colors.length] });
+      heirs.push({ person: father, kind: "father", relation: t("father"), fraction: t("residualAsabah"), percentage: 0, color: colors[colorIdx++ % colors.length] });
     }
   }
 
@@ -64,29 +69,29 @@ function calculateFaraid(
   if (mother) {
     const fraction = hasChildren ? "1/6" : "1/3";
     const pct = hasChildren ? 16.67 : 33.33;
-    heirs.push({ person: mother, relation: "Mother (Ibu)", fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
+    heirs.push({ person: mother, kind: "mother", relation: t("mother"), fraction, percentage: pct, color: colors[colorIdx++ % colors.length] });
   }
 
   // Sons - Asabah (residual)
   for (const son of sons) {
-    heirs.push({ person: son, relation: "Son (Anak Lelaki)", fraction: "Asabah (Residual)", percentage: 0, color: colors[colorIdx++ % colors.length] });
+    heirs.push({ person: son, kind: "son", relation: t("son"), fraction: t("residualAsabah"), percentage: 0, color: colors[colorIdx++ % colors.length] });
   }
 
   // Daughters
   if (sons.length === 0) {
     if (daughters.length === 1) {
       for (const d of daughters) {
-        heirs.push({ person: d, relation: "Daughter (Anak Perempuan)", fraction: "1/2", percentage: 50, color: colors[colorIdx++ % colors.length] });
+        heirs.push({ person: d, kind: "daughter", relation: t("daughter"), fraction: "1/2", percentage: 50, color: colors[colorIdx++ % colors.length] });
       }
     } else if (daughters.length >= 2) {
       for (const d of daughters) {
-        heirs.push({ person: d, relation: "Daughter (Anak Perempuan)", fraction: `2/3 shared`, percentage: 66.67 / daughters.length, color: colors[colorIdx++ % colors.length] });
+        heirs.push({ person: d, kind: "daughter", relation: t("daughter"), fraction: t("twoThirdsShared"), percentage: 66.67 / daughters.length, color: colors[colorIdx++ % colors.length] });
       }
     }
   } else {
     // Daughters with sons get Asabah (son:daughter = 2:1)
     for (const d of daughters) {
-      heirs.push({ person: d, relation: "Daughter (Anak Perempuan)", fraction: "Asabah (1:2 with sons)", percentage: 0, color: colors[colorIdx++ % colors.length] });
+      heirs.push({ person: d, kind: "daughter", relation: t("daughter"), fraction: t("asabahWithSons"), percentage: 0, color: colors[colorIdx++ % colors.length] });
     }
   }
 
@@ -98,11 +103,11 @@ function calculateFaraid(
   if (asabahHeirs.length > 0 && residual > 0) {
     // Sons get 2 shares, daughters get 1 share
     const totalShares = asabahHeirs.reduce((sum, h) => {
-      if (h.relation.includes("Son") || h.relation.includes("Father")) return sum + 2;
+      if (h.kind === "son" || h.kind === "father") return sum + 2;
       return sum + 1;
     }, 0);
     for (const heir of asabahHeirs) {
-      const shares = (heir.relation.includes("Son") || heir.relation.includes("Father")) ? 2 : 1;
+      const shares = (heir.kind === "son" || heir.kind === "father") ? 2 : 1;
       heir.percentage = (shares / totalShares) * residual;
     }
   }
@@ -114,6 +119,7 @@ export default function FaraidCalculatorScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data, getSpouses, getChildren, getParents } = useFamily();
+  const { t } = useI18n();
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
   const muslimPersons = data.persons.filter((p) => p.religion === "Islam");
@@ -121,8 +127,8 @@ export default function FaraidCalculatorScreen() {
 
   const heirShares = useMemo(() => {
     if (!selectedPerson) return [];
-    return calculateFaraid(selectedPerson, data.persons, getSpouses, getChildren, getParents);
-  }, [selectedPersonId, data]);
+    return calculateFaraid(selectedPerson, data.persons, getSpouses, getChildren, getParents, t);
+  }, [selectedPersonId, data, t]);
 
   const totalPercentage = heirShares.reduce((sum, h) => sum + h.percentage, 0);
 
@@ -133,28 +139,25 @@ export default function FaraidCalculatorScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
           <View className="flex-row items-center gap-1">
             <IconSymbol name="chevron.left" size={20} color={colors.primary} />
-            <Text className="text-sm text-primary">Back</Text>
+            <Text className="text-sm text-primary">{t("back")}</Text>
           </View>
         </Pressable>
-        <Text className="text-lg font-semibold text-foreground">Faraid Calculator</Text>
+        <Text className="text-lg font-semibold text-foreground">{t("faraidCalculator")}</Text>
         <View className="w-12" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
         {/* Info */}
-        <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20 mb-6">
-          <Text className="text-sm font-medium text-foreground mb-1">Islamic Inheritance Calculator</Text>
-          <Text className="text-xs text-muted leading-relaxed">
-            Select a deceased Muslim family member to calculate the Faraid (Islamic inheritance) 
-            distribution among eligible heirs based on your family tree data.
-          </Text>
+        <View className="rounded-2xl p-4 border mb-6" style={{ backgroundColor: colors.primary + "12", borderColor: colors.primary + "33" }}>
+          <Text className="text-sm font-medium text-foreground mb-1">{t("faraidInfoTitle")}</Text>
+          <Text className="text-xs text-muted leading-relaxed">{t("faraidInfoDesc")}</Text>
         </View>
 
         {/* Person Selector */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Select Deceased Person</Text>
+        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("selectDeceased")}</Text>
         {muslimPersons.length === 0 ? (
           <View className="bg-surface rounded-2xl p-6 border border-border items-center mb-6">
-            <Text className="text-sm text-muted text-center">No Muslim family members found. Add members with Islam as their religion first.</Text>
+            <Text className="text-sm text-muted text-center">{t("noMuslimMembers")}</Text>
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
@@ -183,7 +186,7 @@ export default function FaraidCalculatorScreen() {
                       className="text-[10px] mt-0.5"
                       style={{ color: selectedPersonId === person.id ? "rgba(255,255,255,0.7)" : colors.muted }}
                     >
-                      {person.gender === "male" ? "Male" : "Female"}
+                      {person.gender === "male" ? t("male") : t("female")}
                     </Text>
                   </View>
                 </Pressable>
@@ -196,7 +199,7 @@ export default function FaraidCalculatorScreen() {
         {selectedPerson && heirShares.length > 0 && (
           <>
             <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
-              Inheritance Distribution for {selectedPerson.firstName}
+              {t("distributionFor")} {selectedPerson.firstName}
             </Text>
 
             {/* Visual Bar Chart */}
@@ -236,14 +239,14 @@ export default function FaraidCalculatorScreen() {
             {/* Total */}
             <View className="bg-surface rounded-2xl p-4 border border-border mb-4">
               <View className="flex-row justify-between">
-                <Text className="text-sm font-medium text-foreground">Total Distributed</Text>
+                <Text className="text-sm font-medium text-foreground">{t("totalDistributed")}</Text>
                 <Text className="text-sm font-bold" style={{ color: Math.abs(totalPercentage - 100) < 1 ? colors.success : colors.warning }}>
                   {totalPercentage.toFixed(1)}%
                 </Text>
               </View>
               {Math.abs(totalPercentage - 100) >= 1 && (
                 <Text className="text-xs text-warning mt-1">
-                  Note: The remaining {(100 - totalPercentage).toFixed(1)}% may go to additional Asabah heirs not in your tree.
+                  {t("remainderNote").replace("{pct}", (100 - totalPercentage).toFixed(1))}
                 </Text>
               )}
             </View>
@@ -264,15 +267,15 @@ export default function FaraidCalculatorScreen() {
                     estateAmount,
                     heirData
                   );
-                } catch (e) {
-                  Alert.alert("Export Failed", "Could not generate Faraid PDF.");
+                } catch {
+                  Alert.alert(t("faraidCalculator"), t("somethingWentWrong"));
                 }
               }}
               style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
             >
               <View className="flex-row items-center justify-center bg-primary rounded-2xl py-3.5 gap-2">
                 <IconSymbol name="arrow.down.doc.fill" size={18} color="#fff" />
-                <Text className="text-sm font-semibold text-white">Export Faraid Report as PDF</Text>
+                <Text className="text-sm font-semibold text-white">{t("exportFaraidPDF")}</Text>
               </View>
             </Pressable>
           </>
@@ -281,7 +284,7 @@ export default function FaraidCalculatorScreen() {
         {selectedPerson && heirShares.length === 0 && (
           <View className="bg-surface rounded-2xl p-6 border border-border items-center">
             <Text className="text-sm text-muted text-center">
-              No eligible heirs found for {selectedPerson.firstName}. Add parents, spouse, or children to this person's profile.
+              {t("noEligibleHeirs").replace("{name}", selectedPerson.firstName)}
             </Text>
           </View>
         )}
