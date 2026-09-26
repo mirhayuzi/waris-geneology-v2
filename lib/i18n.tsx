@@ -286,6 +286,8 @@ const translations = {
     residualAsabah: "Residual (Asabah)",
     twoThirdsShared: "2/3 shared",
     asabahWithSons: "Asabah (1:2 with sons)",
+    rootBadge: "ROOT",
+    showParents: "Show parents",
     inviteMessage: "Assalamualaikum! I'm building our family tree \"{family}\" in the Waris Genealogy app ({count} members so far). Could you help me with the names and dates of relatives you know?",
   },
   bm: {
@@ -568,6 +570,8 @@ const translations = {
     residualAsabah: "Baki (Asabah)",
     twoThirdsShared: "2/3 dikongsi",
     asabahWithSons: "Asabah (1:2 dengan anak lelaki)",
+    rootBadge: "AKAR",
+    showParents: "Tunjuk ibu bapa",
     inviteMessage: "Assalamualaikum! Saya sedang membina salasilah keluarga kita \"{family}\" dalam aplikasi Waris Genealogy ({count} ahli setakat ini). Boleh bantu saya dengan nama dan tarikh saudara-mara yang anda tahu?",
   },
 } as const;

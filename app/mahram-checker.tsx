@@ -22,11 +22,6 @@ function checkMahram(
   getSpouses: (id: string) => Person[],
   getSiblings: (id: string) => Person[],
 ): MahramResult {
-  // Same gender - not applicable for Mahram in marriage context
-  if (personA.gender === personB.gender) {
-    return { isMahram: true, relationship: "sameGender", ruling: "rulingSameGender" };
-  }
-
   // Parent-child
   const parentsA = getParents(personA.id);
   if (parentsA.some((p) => p.id === personB.id)) {
@@ -89,6 +84,11 @@ function checkMahram(
     if (spouseParents.some((sp) => sp.id === personA.id)) {
       return { isMahram: true, relationship: "parentInLaw", ruling: "rulingInLaw" };
     }
+  }
+
+  // Same gender with no closer relationship found above - not applicable for Mahram in marriage context
+  if (personA.gender === personB.gender) {
+    return { isMahram: true, relationship: "sameGender", ruling: "rulingSameGender" };
   }
 
   return { isMahram: false, relationship: "notMahram", ruling: "rulingNotMahram" };
