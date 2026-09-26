@@ -58,6 +58,14 @@ function parseCSV(csvText: string): string[][] {
 }
 
 /**
+ * Backups store photos as a relative path like "photos/<id>.jpg", which is not a
+ * location the app can display. Only keep photo values that are real URIs.
+ */
+export function isUsablePhotoUri(value: string | undefined): boolean {
+  return !!value && /^(file|content|https?|data|blob):/i.test(value);
+}
+
+/**
  * Parse members CSV into Person array
  */
 export function parseMembersCSV(csvText: string): Person[] {
@@ -94,7 +102,7 @@ export function parseMembersCSV(csvText: string): Person[] {
       isAlive: statusVal !== "deceased",
       race: get("ethnicity/race") || undefined,
       religion: (get("religion") || "Islam") as Religion,
-      photo: get("photo file") || undefined,
+      photo: isUsablePhotoUri(get("photo file")) ? get("photo file") : undefined,
       bio: get("biography") || undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

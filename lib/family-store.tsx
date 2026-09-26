@@ -97,6 +97,8 @@ interface FamilyContextType {
   getSpouses: (personId: string) => Person[];
   getSiblings: (personId: string) => Person[];
   resetData: () => void;
+  /** Replaces the whole tree (used by restore) and saves it straight away. */
+  replaceAllData: (data: FamilyData) => void;
 }
 
 const FamilyContext = createContext<FamilyContextType | null>(null);
@@ -232,13 +234,17 @@ export function FamilyProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "RESET_DATA" });
   }, []);
 
+  const replaceAllData = useCallback((d: FamilyData) => {
+    dispatch({ type: "LOAD_DATA", payload: { ...d, updatedAt: new Date().toISOString() } });
+  }, []);
+
   return (
     <FamilyContext.Provider
       value={{
         data, isLoading, addPerson, updatePerson, deletePerson,
         addMarriage, deleteMarriage, addParentChild, deleteParentChild,
         setRootPerson, setFamilyName, addCollaborator, removeCollaborator,
-        getPersonById, getChildren, getParents, getSpouses, getSiblings, resetData,
+        getPersonById, getChildren, getParents, getSpouses, getSiblings, resetData, replaceAllData,
       }}
     >
       {children}

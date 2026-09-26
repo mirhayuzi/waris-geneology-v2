@@ -19,6 +19,7 @@ interface ToolCardProps {
 
 function ToolCard({ title, description, icon, onPress, color, loading }: ToolCardProps) {
   const colors = useColors();
+  const { t } = useI18n();
   return (
     <Pressable onPress={loading ? undefined : onPress} style={({ pressed }) => [{ opacity: loading ? 0.5 : pressed ? 0.7 : 1 }]}>
       <View className="flex-row items-center bg-surface rounded-2xl p-4 border border-border gap-4">
@@ -30,7 +31,7 @@ function ToolCard({ title, description, icon, onPress, color, loading }: ToolCar
         </View>
         <View className="flex-1">
           <Text className="text-base font-semibold text-foreground">{title}</Text>
-          <Text className="text-xs text-muted mt-0.5">{loading ? "Generating..." : description}</Text>
+          <Text className="text-xs text-muted mt-0.5">{loading ? t("generating") : description}</Text>
         </View>
         <IconSymbol name="chevron.right" size={18} color={colors.muted} />
       </View>
@@ -45,18 +46,16 @@ export default function ToolsScreen() {
   const { t } = useI18n();
   const [exporting, setExporting] = useState(false);
 
-  const muslimCount = data.persons.filter((p) => p.religion === "Islam").length;
-
   const handleExportPDF = async () => {
     if (data.persons.length === 0) {
-      Alert.alert("No Data", "Please add family members before exporting.");
+      Alert.alert(t("noDataTitle"), t("addMembersFirst"));
       return;
     }
     setExporting(true);
     try {
       await exportFamilyTreePDF(data);
     } catch (e) {
-      Alert.alert("Export Failed", "Could not generate PDF. Please try again.");
+      Alert.alert(t("exportFamilyTreePDF"), t("somethingWentWrong"));
     } finally {
       setExporting(false);
     }
@@ -64,13 +63,13 @@ export default function ToolsScreen() {
 
   const handlePrint = async () => {
     if (data.persons.length === 0) {
-      Alert.alert("No Data", "Please add family members before printing.");
+      Alert.alert(t("noDataTitle"), t("addMembersFirst"));
       return;
     }
     try {
       await printFamilyTree(data);
     } catch (e) {
-      Alert.alert("Print Failed", "Could not print. Please try again.");
+      Alert.alert(t("printFamilyTree"), t("somethingWentWrong"));
     }
   };
 
@@ -112,7 +111,7 @@ export default function ToolsScreen() {
             onPress={() => router.push("/family-timeline" as any)}
           />
           <ToolCard
-            title={t("millerColumns")}
+            title={t("millerView")}
             description={t("selectMember")}
             icon="list.bullet"
             color="#5856D6"
@@ -140,43 +139,13 @@ export default function ToolsScreen() {
           />
         </View>
 
-        {/* Family Management Section */}
-        <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{t("familyManagement")}</Text>
-        <View className="gap-3 mb-6">
-          <ToolCard
-            title={t("inviteFamily")}
-            description={t("shareTreeWithRelatives")}
-            icon="envelope.fill"
-            color="#5856D6"
-            onPress={() => router.push("/invite-family" as any)}
-          />
-          <ToolCard
-            title={t("backupRestore")}
-            description={t("backupRestoreDesc")}
-            icon="arrow.down.doc.fill"
-            color="#34C759"
-            onPress={() => router.push("/backup-restore" as any)}
-          />
-          <ToolCard
-            title={t("familyStatistics")}
-            description={`${data.persons.length} ${t("members")} · ${muslimCount} Muslim`}
-            icon="info.circle.fill"
-            color="#007AFF"
-            onPress={() => {}}
-          />
-        </View>
-
         {/* Info Card */}
-        <View className="bg-primary/8 rounded-2xl p-4 border border-primary/20">
+        <View className="rounded-2xl p-4 border" style={{ backgroundColor: colors.primary + "12", borderColor: colors.primary + "33" }}>
           <View className="flex-row items-start gap-3">
             <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
             <View className="flex-1">
-              <Text className="text-sm font-medium text-foreground mb-1">About Faraid</Text>
-              <Text className="text-xs text-muted leading-relaxed">
-                Faraid is the Islamic law of inheritance that determines how a deceased Muslim's estate 
-                is distributed among eligible heirs. The calculator uses your family tree data to 
-                automatically identify heirs and compute their shares.
-              </Text>
+              <Text className="text-sm font-medium text-foreground mb-1">{t("aboutFaraid")}</Text>
+              <Text className="text-xs text-muted leading-relaxed">{t("aboutFaraidDesc")}</Text>
             </View>
           </View>
         </View>

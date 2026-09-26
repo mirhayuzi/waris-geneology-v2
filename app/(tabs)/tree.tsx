@@ -49,7 +49,7 @@ function useTreeData() {
     }
 
     return buildNode(rootPerson, 0);
-  }, [data]);
+  }, [data, getChildren, getSpouses]);
 }
 
 // Card-based person node with photo, name, and status
@@ -66,7 +66,7 @@ function PersonCard({ person, isRoot, onPress, onAddChild, colors, scale }: {
   const fontSize = Math.max(9, Math.round(12 * scale));
   const subFontSize = Math.max(7, Math.round(10 * scale));
   const padding = Math.max(6, Math.round(10 * scale));
-  const borderColor = person.isAlive ? colors.primary : colors.muted;
+  const { t } = useI18n();
   const genderColor = person.gender === "male" ? "#4A90D9" : "#E87CA0";
 
   return (
@@ -143,14 +143,14 @@ function PersonCard({ person, isRoot, onPress, onAddChild, colors, scale }: {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 3 }}>
             <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: person.isAlive ? colors.success : colors.muted }} />
             <Text style={{ fontSize: Math.max(7, Math.round(8 * scale)), color: colors.muted }}>
-              {person.isAlive ? "Living" : "Deceased"}
+              {person.isAlive ? t("living") : t("deceased")}
             </Text>
           </View>
 
           {/* Root badge */}
           {isRoot && (
             <View style={{ backgroundColor: colors.primary + "20", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3 }}>
-              <Text style={{ color: colors.primary, fontSize: Math.max(7, Math.round(8 * scale)), fontWeight: "700" }}>ROOT</Text>
+              <Text style={{ color: colors.primary, fontSize: Math.max(7, Math.round(8 * scale)), fontWeight: "700" }}>{t("rootBadge")}</Text>
             </View>
           )}
         </View>
@@ -158,7 +158,12 @@ function PersonCard({ person, isRoot, onPress, onAddChild, colors, scale }: {
 
       {/* +Add button below card */}
       {onAddChild && scale >= 0.5 && (
-        <Pressable onPress={onAddChild} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, marginTop: 4 }]}>
+        <Pressable
+          onPress={onAddChild}
+          accessibilityLabel={t("addChild")}
+          hitSlop={6}
+          style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, marginTop: 4 }]}
+        >
           <View style={{
             width: Math.max(18, Math.round(24 * scale)),
             height: Math.max(18, Math.round(24 * scale)),
@@ -195,11 +200,6 @@ function MarriageConnector({ scale, colors }: { scale: number; colors: ReturnTyp
 // Vertical line connector
 function VerticalLine({ height, colors }: { height: number; colors: ReturnType<typeof useColors> }) {
   return <View style={{ width: 2, height, backgroundColor: colors.border, alignSelf: "center" }} />;
-}
-
-// Horizontal bracket for multiple children
-function HorizontalBracket({ width, colors }: { width: number; colors: ReturnType<typeof useColors> }) {
-  return <View style={{ width, height: 2, backgroundColor: colors.border, alignSelf: "center" }} />;
 }
 
 // Recursive tree node renderer
@@ -249,7 +249,7 @@ function TreeNodeView({ node, router, colors, rootId, scale, onAddChild }: {
           {/* Horizontal bracket if multiple children */}
           {node.children.length > 1 && (
             <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-              {node.children.map((child, idx) => (
+              {node.children.map((child) => (
                 <View key={child.person.id} style={{ alignItems: "center", flex: 1 }}>
                   <View style={{ width: 2, height: 8, backgroundColor: colors.border }} />
                 </View>
@@ -279,9 +279,17 @@ function TreeNodeView({ node, router, colors, rootId, scale, onAddChild }: {
 export default function TreeScreen() {
   const router = useRouter();
   const colors = useColors();
-  const { data } = useFamily();
+  const { data, getParents, setRootPerson } = useFamily();
   const treeData = useTreeData();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
+
+  // The tree is drawn from the root person downwards, so parents of the root are
+  // not visible. Offer a one-tap way to move the tree up a generation.
+  const rootParents = treeData ? getParents(treeData.person.id) : [];
+  const showParents = () => {
+    const father = rootParents.find((p) => p.gender === "male");
+    setRootPerson((father || rootParents[0]).id);
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [zoom, setZoom] = useState(0.85);
 
@@ -396,7 +404,7 @@ export default function TreeScreen() {
           ))}
           {filteredPersons.length === 0 && (
             <View className="items-center py-8">
-              <Text className="text-sm text-muted">{t("noMembersFound")} "{searchQuery}"</Text>
+              <Text className="text-sm text-muted">{t("noMembersFound")} {`"${searchQuery}"`}</Text>
             </View>
           )}
         </ScrollView>
@@ -422,6 +430,22 @@ export default function TreeScreen() {
               </View>
             </Pressable>
           </View>
+
+          {rootParents.length > 0 && (
+            <View className="items-center px-5 mb-2">
+              <Pressable onPress={showParents} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+                <View
+                  className="flex-row items-center gap-2 rounded-full px-4 py-2 border"
+                  style={{ backgroundColor: colors.primary + "12", borderColor: colors.primary + "40" }}
+                >
+                  <IconSymbol name="arrow.up" size={16} color={colors.primary} />
+                  <Text className="text-sm font-medium" style={{ color: colors.primary }} numberOfLines={1}>
+                    {t("showParents")}: {rootParents.map((p) => p.firstName).join(" & ")}
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          )}
 
           {/* Tree View - Scrollable Canvas */}
           <ScrollView

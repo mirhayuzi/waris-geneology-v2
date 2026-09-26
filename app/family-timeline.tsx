@@ -8,6 +8,7 @@ import { useFamily } from "@/lib/family-store";
 import { getDisplayName, Person } from "@/lib/types";
 import { useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
+import { formatDate } from "@/lib/dates";
 
 interface TimelineEvent {
   id: string;
@@ -54,7 +55,7 @@ export default function FamilyTimelineScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data, getPersonById } = useFamily();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
 
   const events = useMemo(() => {
     const list: TimelineEvent[] = [];
@@ -68,7 +69,7 @@ export default function FamilyTimelineScreen() {
           sortDate: new Date(p.birthDate).getTime(),
           type: "birth",
           title: `${getDisplayName(p)}`,
-          subtitle: p.birthPlace ? `Born in ${p.birthPlace}` : "Born",
+          subtitle: p.birthPlace ? `${t("bornIn")} ${p.birthPlace}` : t("born"),
           person: p,
           personId: p.id,
         });
@@ -84,7 +85,7 @@ export default function FamilyTimelineScreen() {
           sortDate: new Date(p.deathDate).getTime(),
           type: "death",
           title: `${getDisplayName(p)}`,
-          subtitle: "Passed away",
+          subtitle: t("passedAway"),
           person: p,
           personId: p.id,
         });
@@ -103,7 +104,7 @@ export default function FamilyTimelineScreen() {
             sortDate: new Date(m.marriageDate).getTime(),
             type: "marriage",
             title: `${husband.firstName} & ${wife.firstName}`,
-            subtitle: "Marriage",
+            subtitle: t("marriage"),
             person: husband,
             personId: husband.id,
           });
@@ -114,7 +115,7 @@ export default function FamilyTimelineScreen() {
     // Sort by date descending (newest first)
     list.sort((a, b) => b.sortDate - a.sortDate);
     return list;
-  }, [data]);
+  }, [data, t]);
 
   const getEventColor = (type: string) => {
     switch (type) {
@@ -140,15 +141,6 @@ export default function FamilyTimelineScreen() {
       case "death": return t("death");
       case "marriage": return t("marriage");
       default: return type;
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("en-MY", { year: "numeric", month: "long", day: "numeric" });
-    } catch {
-      return dateStr;
     }
   };
 
@@ -236,7 +228,7 @@ export default function FamilyTimelineScreen() {
                               {getEventLabel(event.type).toUpperCase()}
                             </Text>
                           </View>
-                          <Text className="text-[11px] text-muted">{formatDate(event.date)}</Text>
+                          <Text className="text-[11px] text-muted">{formatDate(event.date, lang)}</Text>
                         </View>
                         <View className="flex-row items-center gap-2">
                           {event.person && <PersonAvatar person={event.person} size={28} colors={colors} />}
