@@ -39,7 +39,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const colors = useColors();
   const { data, setFamilyName, resetData } = useFamily();
-  const { t, lang, toggleLang } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(data.familyName);
   const [csvExporting, setCsvExporting] = useState(false);
@@ -128,21 +128,26 @@ export default function SettingsScreen() {
 
         {/* Language */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("language")}</Text>
-        <View className="bg-surface rounded-2xl px-4 border border-border mb-6">
-          <SettingsRow
-            icon="globe"
-            title={t("currentLanguage")}
-            subtitle={t("switchLanguage")}
-            onPress={toggleLang}
-            color="#5856D6"
-            rightElement={
-              <View className="bg-primary/10 rounded-full px-3 py-1">
-                <Text className="text-xs font-semibold" style={{ color: colors.primary }}>
-                  {lang === "en" ? "EN" : "BM"}
-                </Text>
-              </View>
-            }
-          />
+        <View className="flex-row bg-surface rounded-2xl p-1 border border-border mb-6">
+          {([["en", "English"], ["bm", "Bahasa Malaysia"]] as const).map(([code, label]) => {
+            const active = lang === code;
+            return (
+              <Pressable
+                key={code}
+                onPress={() => setLang(code)}
+                style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.8 : 1 }]}
+              >
+                <View
+                  className="py-3 rounded-xl items-center"
+                  style={{ backgroundColor: active ? colors.primary : "transparent" }}
+                >
+                  <Text className="text-sm font-semibold" style={{ color: active ? "#fff" : colors.foreground }}>
+                    {label}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* Collaboration */}
@@ -150,18 +155,14 @@ export default function SettingsScreen() {
         <View className="bg-surface rounded-2xl px-4 border border-border mb-6">
           <SettingsRow
             icon="person.2.fill"
-            title={t("sharedMembers")}
-            subtitle={`${data.collaborators.length} ${data.collaborators.length !== 1 ? t("collaborators") : t("collaborator")}`}
+            title={t("inviteFamily")}
+            subtitle={
+              data.collaborators.length > 0
+                ? `${data.collaborators.length} ${data.collaborators.length !== 1 ? t("collaborators") : t("collaborator")}`
+                : t("inviteFamilyDesc")
+            }
             onPress={() => router.push("/invite-family" as any)}
             color={colors.primary}
-          />
-          <View className="h-px bg-border" />
-          <SettingsRow
-            icon="envelope.fill"
-            title={t("inviteFamilyEmail")}
-            subtitle={t("shareViaEmail")}
-            onPress={() => router.push("/invite-family" as any)}
-            color="#5856D6"
           />
         </View>
 
@@ -178,8 +179,8 @@ export default function SettingsScreen() {
           <View className="h-px bg-border" />
           <SettingsRow
             icon="doc.text.fill"
-            title={lang === "bm" ? "Eksport CSV" : "Export CSV"}
-            subtitle={lang === "bm" ? "Simpan data keluarga sebagai fail CSV" : "Save family data as CSV files with photos"}
+            title={t("exportCSV")}
+            subtitle={t("exportCSVDesc")}
             onPress={handleExportCSV}
             color="#FF9500"
             rightElement={
@@ -203,14 +204,11 @@ export default function SettingsScreen() {
         {/* About */}
         <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{t("about")}</Text>
         <View className="bg-surface rounded-2xl px-4 border border-border mb-6">
-          <SettingsRow icon="info.circle.fill" title="Waris Genealogy" subtitle="Version 1.0.0" />
+          <SettingsRow icon="info.circle.fill" title="Waris Genealogy" subtitle={`${t("version")} 1.0.0`} />
           <View className="h-px bg-border" />
           <SettingsRow icon="heart.fill" title={t("madeForMalaysia")} subtitle={t("muslimNonMuslim")} color={colors.error} />
         </View>
 
-        <Text className="text-xs text-muted text-center mt-4">
-          Waris Genealogy App v1.0{"\n"}Built with love for Malaysian families
-        </Text>
       </ScrollView>
     </ScreenContainer>
   );
