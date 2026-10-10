@@ -30,6 +30,5 @@ jobs:
       - name: Tests
         run: pnpm test
         env:
-          # Public Google OAuth client ID (it is built into the app). Add it under
-          # Settings > Secrets and variables > Actions > Variables.
-          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+          # Public Google OAuth web client ID. It is not a secret: it is built into the app.
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1037617043812-hgn6rta4tmh1b7aqu71lerfkeojgnaig.apps.googleusercontent.com
