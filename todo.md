@@ -41,8 +41,8 @@
 - [x] Bug: Google Drive send error - Fixed: proper error handling and imports
 - [x] Bug: JSON export error - Fixed: proper FileSystem imports and null checks
 - [x] Bug: Photo upload STILL failing - ROOT CAUSE: dynamic require() fails at runtime; fixed with static import from expo-file-system/legacy + base64 persistence
-- [ ] Bug: Photo picker crash - ExponentImagePicker native module incompatible with Expo Go; replace with document-picker
-- [ ] Bug: Google Drive import not working
+- [x] Bug: Photo picker crash - ExponentImagePicker native module incompatible with Expo Go; replace with document-picker (expo-image-picker removed, photos use expo-document-picker)
+- [x] Bug: Google Drive import not working (parallel uploads created duplicate folders, restore picked the oldest file, session not restored after restart, restore needed an app restart)
 
 
 ## Major Redesign (Phase 2)
@@ -55,7 +55,7 @@
 - [x] Feature: Hierarchical card-based tree view (like reference APK)
 - [x] Feature: Tree view with visible photos and connection lines
 - [x] Feature: Zoomable/scrollable tree canvas
-- [ ] Feature: Google Drive auto-sync like Fuelio app
+- [x] Feature: Google Drive auto-sync like Fuelio app (auto-backup 30s after edits when enabled and signed in)
 - [x] Feature: Add child buttons on tree nodes
 - [x] Bug: APK build fails - compileSdk android-34 too low, updated to compileSdk 36 / targetSdk 35
 - [x] Feature: Change backup save format from JSON to CSV (Fuelio-style)
@@ -77,3 +77,17 @@
 - [x] Bug: Google Sign-In still blocked - OAuth access denied when user tries to sign in on Android APK (switched to native Google Sign-In)
 - [x] Feature: Switch to Android-native Google Sign-In (Option A) using @react-native-google-signin/google-signin
 - [x] Feature: Remove server-side OAuth callback dependency for Google Sign-In
+
+
+## Simplify & Polish (Phase 3)
+
+- [x] Simpler Home screen (welcome for new users, 3 shortcuts), shorter Add/Edit form with "More details"
+- [x] Member profile as one scrolling page instead of 7 tabs
+- [x] Invite Family opens email / share sheet with a ready-written message (was only saved locally)
+- [x] "Back up first" option before Reset All Data
+- [x] Year-only dates and typed year in the date picker
+- [x] Full Bahasa Malaysia for Faraid, Mahram, Invite, Timeline, Tree
+- [x] Tree: "Show parents" button to move the tree up a generation
+- [x] GitHub Actions CI (type check, lint, tests)
+- [ ] Add repository variable EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID for CI (Settings > Secrets and variables > Actions > Variables)
+- [ ] Confirm the Mahram "same gender" rule with a religious reference

@@ -8,8 +8,9 @@ import { useI18n } from "@/lib/i18n";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FamilyData } from "@/lib/types";
-import { exportFamilyDataAsCSV } from "@/lib/csv-export";
-import { parseMembersCSV, parseMarriagesCSV, parseParentChildCSV, buildFamilyDataFromCSV } from "@/lib/csv-import";
+import { exportFamilyDataAsCSV, membersToCSV, marriagesToCSV, parentChildToCSV } from "@/lib/csv-export";
+import { BACKUP_AUTO_KEY, BACKUP_DATE_KEY, formatBackupTime } from "@/lib/auto-backup";
+import { parseMembersCSV, parseMarriagesCSV, parseParentChildCSV, buildFamilyDataFromCSV, isUsablePhotoUri } from "@/lib/csv-import";
 import {
   GoogleUser,
   getStoredUser,
@@ -27,14 +28,11 @@ let DocumentPicker: any = null;
 try { FileSystem = require("expo-file-system/legacy"); } catch {}
 try { DocumentPicker = require("expo-document-picker"); } catch {}
 
-const BACKUP_DATE_KEY = "@waris_last_backup";
-const BACKUP_AUTO_KEY = "@waris_auto_backup";
-const BACKUP_WIFI_KEY = "@waris_wifi_only";
 
 export default function BackupRestoreScreen() {
   const router = useRouter();
   const colors = useColors();
-  const { data } = useFamily();
+  const { data, replaceAllData } = useFamily();
   const { t, lang } = useI18n();
 
   // Google Sign-In state
@@ -49,7 +47,6 @@ export default function BackupRestoreScreen() {
   const [importing, setImporting] = useState(false);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [autoBackup, setAutoBackup] = useState(false);
-  const [wifiOnly, setWifiOnly] = useState(true);
 
   // Configure Google Sign-In on mount
   useEffect(() => {
@@ -60,7 +57,6 @@ export default function BackupRestoreScreen() {
   useEffect(() => {
     AsyncStorage.getItem(BACKUP_DATE_KEY).then((d) => { if (d) setLastBackup(d); });
     AsyncStorage.getItem(BACKUP_AUTO_KEY).then((d) => { if (d === "true") setAutoBackup(true); });
-    AsyncStorage.getItem(BACKUP_WIFI_KEY).then((d) => { if (d !== "false") setWifiOnly(true); });
     // Check if already signed in
     getStoredUser().then((user) => { if (user) setGoogleUser(user); });
   }, []);
@@ -68,11 +64,6 @@ export default function BackupRestoreScreen() {
   const toggleAutoBackup = (val: boolean) => {
     setAutoBackup(val);
     AsyncStorage.setItem(BACKUP_AUTO_KEY, String(val));
-  };
-
-  const toggleWifiOnly = (val: boolean) => {
-    setWifiOnly(val);
-    AsyncStorage.setItem(BACKUP_WIFI_KEY, String(val));
   };
 
   // ==================== GOOGLE SIGN-IN (Native) ====================
@@ -125,54 +116,6 @@ export default function BackupRestoreScreen() {
     }
   };
 
-  // ==================== CSV GENERATION ====================
-
-  const buildMembersCSVString = (): string => {
-    const escapeCSV = (value: string) => {
-      if (value === null || value === undefined) return '""';
-      const s = String(value);
-      if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
-    const headers = ["ID", "First Name", "Last Name", "Prefix/Title", "Bin/Binti", "Gender", "Date of Birth", "Place of Birth", "Date of Death", "Status", "Ethnicity/Race", "Religion", "Photo File", "Biography"];
-    const rows = data.persons.map((m) => [
-      m.id, m.firstName, m.lastName || "", m.prefix || "", m.binBinti || "",
-      m.gender, m.birthDate || "", m.birthPlace || "", m.deathDate || "",
-      m.isAlive ? "Living" : "Deceased", m.race || "", m.religion || "",
-      m.photo ? `photos/${m.id}.jpg` : "", m.bio || "",
-    ]);
-    return [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\n");
-  };
-
-  const buildMarriagesCSVString = (): string => {
-    const escapeCSV = (value: string) => {
-      if (value === null || value === undefined) return '""';
-      const s = String(value);
-      if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-      return s;
-    };
-    const headers = ["Marriage ID", "Husband ID", "Wife ID", "Marriage Date", "Marriage Place", "Divorce Date", "Status", "Notes"];
-    const rows = data.marriages.map((m) => [
-      m.id, m.husbandId, m.wifeId, m.marriageDate || "", m.marriagePlace || "",
-      m.divorceDate || "", m.isActive ? "Active" : "Divorced", m.notes || "",
-    ]);
-    return [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\n");
-  };
-
-  const buildParentChildCSVString = (): string => {
-    const escapeCSV = (value: string) => {
-      if (value === null || value === undefined) return '""';
-      const s = String(value);
-      if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
-      return s;
-    };
-    const headers = ["Relationship ID", "Parent ID", "Child ID", "Relationship Type"];
-    const rows = data.parentChildren.map((r) => [r.id, r.parentId, r.childId, r.type]);
-    return [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\n");
-  };
-
   // ==================== SEND TO GOOGLE DRIVE ====================
 
   const handleSendToDrive = async () => {
@@ -193,14 +136,14 @@ export default function BackupRestoreScreen() {
 
     setSending(true);
     try {
-      const membersCSV = buildMembersCSVString();
-      const marriagesCSV = buildMarriagesCSVString();
-      const parentChildCSV = buildParentChildCSVString();
-
-      const result = await syncAllToDrive(membersCSV, marriagesCSV, parentChildCSV);
+      const result = await syncAllToDrive(
+        membersToCSV(data.persons),
+        marriagesToCSV(data.marriages),
+        parentChildToCSV(data.parentChildren),
+      );
 
       if (result.success) {
-        const now = new Date().toLocaleString("en-MY");
+        const now = formatBackupTime(new Date());
         await AsyncStorage.setItem(BACKUP_DATE_KEY, now);
         setLastBackup(now);
         Alert.alert(
@@ -279,7 +222,7 @@ export default function BackupRestoreScreen() {
     try {
       if (Platform.OS === "web") {
         // Web: download via browser
-        const membersCSV = buildMembersCSVString();
+        const membersCSV = membersToCSV(data.persons);
         const blob = new Blob([membersCSV], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -303,9 +246,9 @@ export default function BackupRestoreScreen() {
         const dirUri = permissions.directoryUri;
 
         // Step 2: Generate CSV content
-        const membersCSV = buildMembersCSVString();
-        const marriagesCSV = buildMarriagesCSVString();
-        const parentChildCSV = buildParentChildCSVString();
+        const membersCSV = membersToCSV(data.persons);
+        const marriagesCSV = marriagesToCSV(data.marriages);
+        const parentChildCSV = parentChildToCSV(data.parentChildren);
 
         // Step 3: Create and write each CSV file in the chosen directory
         const dateStr = new Date().toISOString().split("T")[0];
@@ -463,14 +406,28 @@ export default function BackupRestoreScreen() {
         {
           text: lang === "bm" ? "Pulihkan" : "Restore",
           style: "destructive",
-          onPress: async () => {
+          onPress: () => {
             try {
-              await AsyncStorage.setItem("@waris_family_data", JSON.stringify(parsed));
+              // Backups don't contain the photo files, so keep any photo this phone already has for the same person
+              const persons = parsed.persons.map((p) => {
+                if (isUsablePhotoUri(p.photo)) return p;
+                const current = data.persons.find((c) => c.id === p.id);
+                return { ...p, photo: current?.photo };
+              });
+              // Update the running app directly (it saves automatically), so no restart is needed
+              replaceAllData({
+                ...parsed,
+                persons,
+                marriages: parsed.marriages || [],
+                parentChildren: parsed.parentChildren || [],
+                collaborators: data.collaborators,
+                familyName: parsed.familyName || data.familyName,
+              });
               Alert.alert(
                 lang === "bm" ? "Dipulihkan" : "Restored",
                 lang === "bm"
-                  ? `Berjaya memulihkan ${parsed.persons.length} ahli.\n\nSila mulakan semula aplikasi.`
-                  : `Successfully restored ${parsed.persons.length} members.\n\nPlease restart the app to see changes.`,
+                  ? `Berjaya memulihkan ${parsed.persons.length} ahli.`
+                  : `Successfully restored ${parsed.persons.length} members.`,
               );
             } catch {
               Alert.alert(lang === "bm" ? "Ralat" : "Error", lang === "bm" ? "Gagal memulihkan data." : "Failed to restore data.");
@@ -651,24 +608,13 @@ export default function BackupRestoreScreen() {
             <View className="mb-6">
               <View className="flex-row items-center justify-between py-3">
                 <Text className="text-sm text-foreground flex-1">
-                  {lang === "bm" ? "Auto segerak apabila menambah/mengedit data." : "Auto-backup while adding/editing data."}
+                  {lang === "bm" ? "Sandar automatik ke Google Drive selepas menambah/menyunting data." : "Automatically back up to Google Drive after adding or editing data."}
                 </Text>
                 <Switch
                   value={autoBackup}
                   onValueChange={toggleAutoBackup}
                   trackColor={{ false: colors.border, true: colors.primary + "60" }}
                   thumbColor={autoBackup ? colors.primary : colors.muted}
-                />
-              </View>
-              <View className="flex-row items-center justify-between py-3">
-                <Text className="text-sm text-foreground flex-1">
-                  {lang === "bm" ? "Segerak hanya melalui WiFi." : "Auto sync only on WiFi."}
-                </Text>
-                <Switch
-                  value={wifiOnly}
-                  onValueChange={toggleWifiOnly}
-                  trackColor={{ false: colors.border, true: colors.primary + "60" }}
-                  thumbColor={wifiOnly ? colors.primary : colors.muted}
                 />
               </View>
             </View>

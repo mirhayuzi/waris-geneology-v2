@@ -42,6 +42,7 @@ const MAPPING = {
   "plus": "add",
   "minus": "remove",
   "arrow.clockwise": "refresh",
+  "arrow.up": "arrow-upward",
   "square.grid.2x2.fill": "grid-view",
   "folder.fill": "folder",
   "arrow.down.circle.fill": "download",

@@ -42,6 +42,11 @@ try {
   // Not available (web or missing native module)
 }
 
+/** For tests only: swap in a fake Google Sign-In module (the lazy require above can't be mocked). */
+export function __setGoogleSigninModuleForTests(mod: any): void {
+  GoogleSigninModule = mod;
+}
+
 /**
  * Configure Google Sign-In (call once at app start).
  * Uses the Web Client ID for getting idToken and server auth code.
@@ -113,8 +118,13 @@ export async function getAccessToken(): Promise<string | null> {
   const { GoogleSignin } = GoogleSigninModule;
 
   try {
-    // Check if user is signed in
-    const currentUser = GoogleSignin.getCurrentUser();
+    // After the app restarts, the native module forgets the current user until
+    // signInSilently() is called, so restore the previous session first.
+    let currentUser = GoogleSignin.getCurrentUser();
+    if (!currentUser && GoogleSignin.hasPreviousSignIn()) {
+      const response = await GoogleSignin.signInSilently();
+      currentUser = response?.type === "success" ? response.data : GoogleSignin.getCurrentUser();
+    }
     if (!currentUser) return null;
 
     // getTokens() returns fresh tokens (auto-refreshed if expired)
@@ -202,24 +212,27 @@ export async function isSignedIn(): Promise<boolean> {
 // ==================== GOOGLE DRIVE API ====================
 
 /**
+ * Find every Waris Genealogy folder on Drive, oldest first.
+ * Earlier versions uploaded files in parallel and could create several folders.
+ */
+async function findAppFolders(accessToken: string): Promise<string[]> {
+  const query = `name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const searchUrl = `${DRIVE_FILES_ENDPOINT}?q=${encodeURIComponent(query)}&fields=files(id,name)&orderBy=createdTime`;
+  const searchResponse = await fetch(searchUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!searchResponse.ok) return [];
+  const searchData = await searchResponse.json();
+  return (searchData.files || []).map((f: { id: string }) => f.id);
+}
+
+/**
  * Find or create the Waris Genealogy folder on Drive
  */
 async function getOrCreateAppFolder(accessToken: string): Promise<string | null> {
   try {
-    // Search for existing folder
-    const query = `name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-    const searchUrl = `${DRIVE_FILES_ENDPOINT}?q=${encodeURIComponent(query)}&fields=files(id,name)`;
-
-    const searchResponse = await fetch(searchUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (searchResponse.ok) {
-      const searchData = await searchResponse.json();
-      if (searchData.files && searchData.files.length > 0) {
-        return searchData.files[0].id;
-      }
-    }
+    const existing = await findAppFolders(accessToken);
+    if (existing.length > 0) return existing[0];
 
     // Create folder if not found
     const createResponse = await fetch(DRIVE_FILES_ENDPOINT, {
@@ -283,7 +296,7 @@ export async function uploadCSVToDrive(
     const boundary = "waris_boundary_" + Date.now();
     const metadata = existingFileId
       ? { name: fileName }
-      : { name: fileName, parents: [folderId] };
+      : { name: fileName, mimeType: "text/csv", parents: [folderId] };
 
     const multipartBody =
       `--${boundary}\r\n` +
@@ -342,12 +355,13 @@ export async function listDriveFiles(): Promise<{ success: boolean; files: Drive
   }
 
   try {
-    const folderId = await getOrCreateAppFolder(accessToken);
-    if (!folderId) {
-      return { success: false, files: [], message: "Failed to access app folder." };
+    const folderIds = await findAppFolders(accessToken);
+    if (folderIds.length === 0) {
+      return { success: true, files: [] };
     }
 
-    const query = `'${folderId}' in parents and trashed=false and mimeType='text/csv'`;
+    const inFolders = folderIds.map((id) => `'${id}' in parents`).join(" or ");
+    const query = `(${inFolders}) and trashed=false`;
     const url = `${DRIVE_FILES_ENDPOINT}?q=${encodeURIComponent(query)}&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime desc`;
 
     const response = await fetch(url, {
@@ -356,7 +370,8 @@ export async function listDriveFiles(): Promise<{ success: boolean; files: Drive
 
     if (response.ok) {
       const data = await response.json();
-      return { success: true, files: data.files || [] };
+      const files: DriveFile[] = (data.files || []).filter((f: DriveFile) => f.name.toLowerCase().endsWith(".csv"));
+      return { success: true, files };
     } else {
       return { success: false, files: [], message: `Failed to list files: ${response.status}` };
     }
@@ -394,16 +409,30 @@ export async function downloadDriveFile(fileId: string): Promise<{ success: bool
 /**
  * Upload all family data CSVs to Drive
  */
-export async function syncAllToDrive(
+let syncQueue: Promise<unknown> = Promise.resolve();
+
+export function syncAllToDrive(
   membersCSV: string,
   marriagesCSV: string,
   parentChildCSV: string,
 ): Promise<{ success: boolean; message: string }> {
-  const results = await Promise.all([
-    uploadCSVToDrive(membersCSV, "members.csv"),
-    uploadCSVToDrive(marriagesCSV, "marriages.csv"),
-    uploadCSVToDrive(parentChildCSV, "parent-child.csv"),
-  ]);
+  // Queue syncs so a manual backup and an automatic one never overlap
+  const run = syncQueue.then(() => doSyncAllToDrive(membersCSV, marriagesCSV, parentChildCSV));
+  syncQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function doSyncAllToDrive(
+  membersCSV: string,
+  marriagesCSV: string,
+  parentChildCSV: string,
+): Promise<{ success: boolean; message: string }> {
+  // Upload one file at a time: in parallel, each upload could create its own app folder
+  const results = [
+    await uploadCSVToDrive(membersCSV, "members.csv"),
+    await uploadCSVToDrive(marriagesCSV, "marriages.csv"),
+    await uploadCSVToDrive(parentChildCSV, "parent-child.csv"),
+  ];
 
   const allSuccess = results.every((r) => r.success);
   const failedFiles = results.filter((r) => !r.success).map((r) => r.message);
@@ -442,17 +471,18 @@ export async function downloadAllFromDrive(): Promise<{
   let marriagesCSV: string | undefined;
   let parentChildCSV: string | undefined;
 
+  // Files are sorted newest first: keep the newest copy of each file and skip older duplicates
   for (const file of listResult.files) {
+    const name = file.name.toLowerCase();
+    const kind = name.includes("member") ? "members" : name.includes("marriage") ? "marriages" : name.includes("parent") ? "parentChild" : null;
+    if (!kind) continue;
+    if ((kind === "members" && membersCSV) || (kind === "marriages" && marriagesCSV) || (kind === "parentChild" && parentChildCSV)) continue;
+
     const download = await downloadDriveFile(file.id);
     if (download.success && download.content) {
-      const name = file.name.toLowerCase();
-      if (name.includes("member")) {
-        membersCSV = download.content;
-      } else if (name.includes("marriage")) {
-        marriagesCSV = download.content;
-      } else if (name.includes("parent")) {
-        parentChildCSV = download.content;
-      }
+      if (kind === "members") membersCSV = download.content;
+      else if (kind === "marriages") marriagesCSV = download.content;
+      else parentChildCSV = download.content;
     }
   }
 

@@ -56,7 +56,7 @@ async function createExportFolders(): Promise<string | null> {
 /**
  * Convert members array to CSV format
  */
-function membersToCSV(members: Person[]): string {
+export function membersToCSV(members: Person[]): string {
   const headers = [
     "ID",
     "First Name",
@@ -110,7 +110,7 @@ function membersToCSV(members: Person[]): string {
 /**
  * Convert marriages to CSV format
  */
-function marriagesToCSV(marriages: Marriage[]): string {
+export function marriagesToCSV(marriages: Marriage[]): string {
   const headers = ["Marriage ID", "Husband ID", "Wife ID", "Marriage Date", "Marriage Place", "Divorce Date", "Status", "Notes"];
 
   const rows = marriages.map((marriage) => [
@@ -142,7 +142,7 @@ function marriagesToCSV(marriages: Marriage[]): string {
 /**
  * Convert parent-child relationships to CSV format
  */
-function parentChildToCSV(parentChildren: ParentChild[]): string {
+export function parentChildToCSV(parentChildren: ParentChild[]): string {
   const headers = ["Relationship ID", "Parent ID", "Child ID", "Relationship Type"];
 
   const rows = parentChildren.map((rel) => [rel.id, rel.parentId, rel.childId, rel.type]);
