@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { addRelative as addRelativeAction, type RelativeRequest } from "./actions";
-import { buildBackup, parseBackup } from "./backup";
+import { buildBackup, parseBackupFiles } from "./backup";
 import { deletePhoto, readPhotoBase64, savePhotoFrom, writePhotoBase64 } from "./files";
 import { toGedcom } from "./gedcom";
 import { FamilyGraph } from "./graph";
@@ -42,8 +42,9 @@ interface Store {
   setHome: (id: string) => Promise<void>;
   setFamilyName: (name: string) => Promise<void>;
   backupText: () => Promise<string>;
-  restore: (text: string) => Promise<number>;
-  peekBackup: (text: string) => number;
+  /** Restore from a Waris JSON backup or the old app's CSV files */
+  restore: (texts: string[]) => Promise<number>;
+  peekBackup: (texts: string[]) => number;
   gedcom: (includeLiving: boolean) => string;
 }
 
@@ -223,9 +224,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       return JSON.stringify(buildBackup(snapshot, photos));
     },
-    peekBackup: (text) => parseBackup(text).data.persons.length,
-    restore: async (text) => {
-      const parsed = parseBackup(text);
+    peekBackup: (texts) => parseBackupFiles(texts).data.persons.length,
+    restore: async (texts) => {
+      const parsed = parseBackupFiles(texts);
       const data = parsed.data;
       for (const p of data.persons) {
         if (!p.photo) continue;

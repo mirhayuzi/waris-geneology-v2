@@ -50,4 +50,13 @@ pnpm check && pnpm lint
 
 The web build (`pnpm web`) is a preview only: it uses a sample family in memory and nothing is saved.
 
-Build an APK with EAS: `eas build -p android --profile preview`.
+To build locally instead: `npx expo prebuild -p android` then `cd android && ./gradlew assembleRelease`.
+
+## Getting the APK
+
+Every push to `main` builds a signed APK on GitHub and puts it on the Releases page:
+**https://github.com/mirhayuzi/waris-geneology-v2/releases/latest** — open it on the phone and tap the `.apk`.
+
+Signing: `signing/waris-release.p12` is the app's signing key, protected by a password that is stored only
+as the repository secret `ANDROID_KEYSTORE_PASSWORD`. Keep that password safe: without it, future builds can't
+update the installed app.

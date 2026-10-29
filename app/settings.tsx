@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, View } from "react-native";
 import { PersonPicker } from "@/components/PersonPicker";
 import { Choice, Field, Icon, Muted, Row, Screen, Section } from "@/components/ui";
-import { pickTextFile, saveTextFile } from "@/lib/files";
+import { pickTextFiles, saveTextFile } from "@/lib/files";
 import { fullName } from "@/lib/model";
 import { IS_PREVIEW } from "@/lib/open-repo";
 import { useStore } from "@/lib/store";
@@ -39,11 +39,12 @@ export default function SettingsScreen() {
 
   const restore = () =>
     run(async () => {
-      const file = await pickTextFile();
-      if (!file) return;
+      const files = await pickTextFiles();
+      if (!files.length) return;
+      const texts = files.map((f) => f.text);
       let n: number;
       try {
-        n = store.peekBackup(file.text);
+        n = store.peekBackup(texts);
       } catch {
         Alert.alert(t("restoreBackup"), t("backupFailed"));
         return;
@@ -55,7 +56,7 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: () =>
             run(async () => {
-              const count = await store.restore(file.text);
+              const count = await store.restore(texts);
               Alert.alert(t("restoreBackup"), t("restored", { n: count }));
               router.dismissTo("/");
             }),
@@ -108,7 +109,7 @@ export default function SettingsScreen() {
             <Muted>{t("backupDesc")}</Muted>
           </View>
           <Row title={t("exportBackup")} left={<Icon name="save-alt" color={c.primary} />} onPress={exportBackup} />
-          <Row title={t("restoreBackup")} left={<Icon name="restore" color={c.primary} />} onPress={restore} />
+          <Row title={t("restoreBackup")} subtitle={t("restoreDesc")} left={<Icon name="restore" color={c.primary} />} onPress={restore} />
           <Row title={t("exportGedcom")} subtitle={t("gedcomDesc")} left={<Icon name="ios-share" color={c.primary} />} onPress={exportGedcom} last />
         </Section>
 

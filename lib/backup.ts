@@ -1,3 +1,4 @@
+import { isLegacyCSV, legacyFromCSV } from "./csv-legacy";
 import { convertLegacy, isLegacyData } from "./legacy";
 import type { FamilySnapshot, LinkKind, ParentLink, Person, Union, UnionStatus } from "./model";
 
@@ -95,4 +96,17 @@ export function parseBackup(text: string): ParsedBackup {
     return { data: sanitize(snapshot), photos: {}, legacyPhotos: photos };
   }
   throw new Error("unknown-format");
+}
+
+/**
+ * Reads one or more picked files: a Waris JSON backup, or the old app's CSV files
+ * (members.csv plus optionally marriages.csv and parent_child.csv).
+ */
+export function parseBackupFiles(texts: string[]): ParsedBackup {
+  const json = texts.find((t) => /^\s*[{[]/.test(t));
+  if (json !== undefined) return parseBackup(json);
+  const csv = texts.filter(isLegacyCSV);
+  if (!csv.length) throw new Error("unknown-format");
+  const { snapshot } = convertLegacy(legacyFromCSV(csv));
+  return { data: sanitize(snapshot), photos: {}, legacyPhotos: {} };
 }

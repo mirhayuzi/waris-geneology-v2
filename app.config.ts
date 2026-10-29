@@ -4,6 +4,9 @@ import type { ExpoConfig } from "expo/config";
 // its data for the one-time migration to SQLite) when the id stays the same.
 const APP_ID = "space.manus.waris.genealogy.t20260312144942";
 
+// GitHub builds pass their run number, so every new APK installs as an update
+const VERSION_CODE = 100 + (Number(process.env.BUILD_NUMBER) || 0);
+
 const config: ExpoConfig = {
   name: "Waris",
   slug: "waris-genealogy",
@@ -31,6 +34,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: APP_ID,
+    versionCode: VERSION_CODE,
     permissions: [],
   },
   web: {

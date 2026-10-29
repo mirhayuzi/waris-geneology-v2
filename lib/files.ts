@@ -78,16 +78,16 @@ export async function pickImage(): Promise<{ uri: string; mime?: string | null }
   return { uri: res.assets[0].uri, mime: res.assets[0].mimeType };
 }
 
-/** Lets the user pick a file and returns its text, or null if cancelled. */
-export async function pickTextFile(): Promise<{ name: string; text: string } | null> {
-  const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true, multiple: false });
-  if (res.canceled || !res.assets?.length) return null;
-  const asset = res.assets[0];
-  if (Platform.OS === "web") {
-    const text = await (await fetch(asset.uri)).text();
-    return { name: asset.name, text };
+/** Lets the user pick one or more files and returns their text ([] if cancelled). */
+export async function pickTextFiles(): Promise<{ name: string; text: string }[]> {
+  const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true, multiple: true });
+  if (res.canceled || !res.assets?.length) return [];
+  const out: { name: string; text: string }[] = [];
+  for (const asset of res.assets) {
+    const text = Platform.OS === "web" ? await (await fetch(asset.uri)).text() : await FileSystem.readAsStringAsync(asset.uri);
+    out.push({ name: asset.name, text });
   }
-  return { name: asset.name, text: await FileSystem.readAsStringAsync(asset.uri) };
+  return out;
 }
 
 /**
