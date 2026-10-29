@@ -29,6 +29,3 @@ jobs:
 
       - name: Tests
         run: pnpm test
-        env:
-          # Public Google OAuth web client ID. It is not a secret: it is built into the app.
-          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1037617043812-14v12tvicji1r82as1b4q5jvljsfvhba.apps.googleusercontent.com
