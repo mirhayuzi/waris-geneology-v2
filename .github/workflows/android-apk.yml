@@ -63,11 +63,33 @@ jobs:
           PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon \
+          set +e
+          ./gradlew assembleRelease --no-daemon --stacktrace \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/signing/waris-release.p12" \
             -Pandroid.injected.signing.store.password="$PW" \
             -Pandroid.injected.signing.key.alias=waris \
-            -Pandroid.injected.signing.key.password="$PW"
+            -Pandroid.injected.signing.key.password="$PW" 2>&1 | tee ../gradle.log
+          CODE=${PIPESTATUS[0]}
+          set -e
+          if [ "$CODE" != "0" ]; then
+            # Show the cause as an annotation, so it can be read without opening the full log
+            python3 - <<'PY'
+          import re
+          log = open("../gradle.log", errors="replace").read()
+          parts = []
+          m = re.search(r"\* What went wrong:\n(.*?)(?:\n\* Try:|\Z)", log, re.S)
+          if m:
+              parts.append("WHAT WENT WRONG:\n" + m.group(1).strip()[:3000])
+          errs = [l for l in log.splitlines() if re.search(r"(^e: |error:|ERROR|FAILED|Exception)", l)]
+          if errs:
+              parts.append("ERROR LINES:\n" + "\n".join(dict.fromkeys(errs))[:3000])
+          if not parts:
+              parts.append("LOG TAIL:\n" + "\n".join(log.splitlines()[-60:])[-3000:])
+          for p in parts:
+              print("::error title=Gradle build failed::" + p.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+          PY
+            exit "$CODE"
+          fi
 
       - name: Check the APK is signed with the Waris key
         run: |
