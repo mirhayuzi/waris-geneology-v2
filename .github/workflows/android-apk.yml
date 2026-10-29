@@ -37,6 +37,14 @@ jobs:
             echo "::error::Add the repository secret ANDROID_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions), then re-run this workflow."
             exit 1
           fi
+          # Ignore spaces or line breaks pasted around the password
+          PW=$(printf '%s' "$PW" | tr -d '[:space:]')
+          echo "::add-mask::$PW"
+          if ! keytool -list -keystore signing/waris-release.p12 -storetype PKCS12 -storepass "$PW" > /dev/null 2>&1; then
+            echo "::error::The ANDROID_KEYSTORE_PASSWORD secret does not match signing/waris-release.p12. Update the secret (copy it exactly) and re-run."
+            exit 1
+          fi
+          echo "KEY_PW=$PW" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
 
@@ -59,9 +67,8 @@ jobs:
         run: npx expo prebuild --platform android --no-install --clean
 
       - name: Build release APK
-        env:
-          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
+          PW="$KEY_PW"
           cd android
           set +e
           ./gradlew assembleRelease --no-daemon --stacktrace \
