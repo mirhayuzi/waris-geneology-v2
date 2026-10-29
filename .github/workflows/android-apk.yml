@@ -2,7 +2,8 @@ name: Build Android APK
 
 # Builds a signed APK and publishes it on the repo's Releases page:
 #   https://github.com/mirhayuzi/waris-geneology-v2/releases/latest
-# Runs on every push to main (and the rewrite branch), or by hand from the Actions tab.
+# Runs on every push to main (and the rewrite branch) that changes app files,
+# or by hand from the Actions tab (Run workflow / Re-run).
 
 on:
   push:
