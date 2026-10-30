@@ -10,8 +10,9 @@ const VERSION_CODE = 100 + (Number(process.env.BUILD_NUMBER) || 0);
 const config: ExpoConfig = {
   name: "Waris",
   slug: "waris-genealogy",
-  version: "2.1.0",
-  orientation: "portrait",
+  version: "2.2.0",
+  // Tablets may rotate; phones are locked to portrait at start-up (app/_layout.tsx)
+  orientation: "default",
   icon: "./assets/images/icon.png",
   scheme: "waris",
   userInterfaceStyle: "automatic",
@@ -36,6 +37,19 @@ const config: ExpoConfig = {
     package: APP_ID,
     versionCode: VERSION_CODE,
     permissions: [],
+    // "Open with Waris" for family files from WhatsApp, Files, Gmail ...
+    intentFilters: [
+      {
+        action: "VIEW",
+        category: ["DEFAULT"],
+        data: [
+          { scheme: "content", mimeType: "application/json" },
+          { scheme: "content", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+          { scheme: "file", mimeType: "application/json" },
+          { scheme: "file", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        ],
+      },
+    ],
   },
   web: {
     bundler: "metro",

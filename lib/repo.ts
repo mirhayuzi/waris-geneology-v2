@@ -27,6 +27,10 @@ export const META = {
   treeDown: "tree_down",
   treeAdd: "tree_add",
   legacyImported: "legacy_imported",
+  /** Edits since the last backup, when that was, and until when "Later" hides the reminder */
+  changesSinceBackup: "changes_since_backup",
+  lastBackup: "last_backup",
+  backupSnooze: "backup_snooze",
   /** "1" while the tree is being drawn; still "1" at the next launch means drawing crashed */
   treeDrawing: "tree_drawing",
   /** JSON map: kind-of-link key -> the user's own term (e.g. "makcik ipar") */

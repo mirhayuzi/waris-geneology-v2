@@ -1,6 +1,8 @@
+import * as ScreenOrientation from "expo-screen-orientation";
 import { Stack } from "expo-router";
+import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Dimensions, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -29,11 +31,19 @@ function Gate() {
       <Stack.Screen name="unlinked" />
       <Stack.Screen name="duplicates" />
       <Stack.Screen name="print" />
+      <Stack.Screen name="open" />
     </Stack>
   );
 }
 
 export default function RootLayout() {
+  // Phones stay upright; tablets (shortest side 600dp or more) can turn
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const { width, height } = Dimensions.get("screen");
+    if (Math.min(width, height) < 600) ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

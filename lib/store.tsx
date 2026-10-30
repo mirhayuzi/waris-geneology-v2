@@ -13,6 +13,7 @@ import { convertLegacy, LEGACY_KEY, type LegacyData } from "./legacy";
 import { joinPersons, mergeSnapshots, pairKey, prepareShare } from "./merge";
 import { buildXlsx, fromBase64, toBase64 } from "./xlsx";
 import { readXlsx } from "./xlsx-read";
+import { SNOOZE_DAYS, shouldRemindBackup } from "./reminder";
 import { type FamilySnapshot, nowIso, type Person, type Union } from "./model";
 import { openRepo } from "./open-repo";
 import { META, type Repo } from "./repo";
@@ -37,6 +38,11 @@ interface Store {
   /** One-time message to show (e.g. after moving old data) */
   notice?: string;
   clearNotice: () => void;
+  /** Time to suggest a backup (enough changes since the last one) */
+  backupDue: boolean;
+  changesSinceBackup: number;
+  markBackedUp: () => void;
+  snoozeBackup: () => void;
 
   savePerson: (p: Person) => Promise<void>;
   setPhoto: (p: Person, source: { uri: string; mime?: string | null } | null) => Promise<Person>;
@@ -133,9 +139,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const t = useCallback((key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang]);
   const graph = useMemo(() => new FamilyGraph(snapshot), [snapshot]);
 
+  const [backupInfo, setBackupInfo] = useState<{ changes: number; last?: string; snooze?: string }>({ changes: 0 });
+
+  // Every edit ends with a reload, so this is where changes since the last backup are counted
   const reload = useCallback(async () => {
-    const s = await repoRef.current!.load();
+    const repo = repoRef.current!;
+    const s = await repo.load();
     setSnapshot(s);
+    const n = (Number(await repo.getMeta(META.changesSinceBackup)) || 0) + 1;
+    await repo.setMeta(META.changesSinceBackup, String(n));
+    setBackupInfo((b) => ({ ...b, changes: n }));
     return s;
   }, []);
 
@@ -165,6 +178,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           setNotice(translate(l === "en" || l === "bm" ? l : defaultLang(), "treeReset"));
         }
         await repo.setMeta(META.treeDrawing, "1");
+        setBackupInfo({
+          changes: Number(await repo.getMeta(META.changesSinceBackup)) || 0,
+          last: await repo.getMeta(META.lastBackup),
+          snooze: await repo.getMeta(META.backupSnooze),
+        });
         setTreeOptionsState(opts);
         try {
           setCustomTerms(JSON.parse((await repo.getMeta(META.customTerms)) ?? "{}"));
@@ -222,6 +240,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     homeId: snapshot.homePersonId,
     notice,
     clearNotice: () => setNotice(undefined),
+    backupDue: shouldRemindBackup({ people: snapshot.persons.length, changes: backupInfo.changes, lastBackup: backupInfo.last, snoozeUntil: backupInfo.snooze, now: new Date() }),
+    changesSinceBackup: backupInfo.changes,
+    markBackedUp: () => {
+      const last = new Date().toISOString();
+      setBackupInfo({ changes: 0, last });
+      repo().setMeta(META.lastBackup, last);
+      repo().setMeta(META.changesSinceBackup, "0");
+      repo().setMeta(META.backupSnooze, undefined);
+    },
+    snoozeBackup: () => {
+      const snooze = new Date(Date.now() + SNOOZE_DAYS * 86400000).toISOString();
+      setBackupInfo((b) => ({ ...b, snooze }));
+      repo().setMeta(META.backupSnooze, snooze);
+    },
 
     savePerson: async (p) => {
       await repo().savePerson({ ...p, updatedAt: nowIso() });
@@ -354,6 +386,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     gedcom: (includeLiving) => toGedcom(snapshot, { includeLiving }),
     excelBase64: async (opts = {}) => {
+      // Let the "Preparing the file…" spinner appear before the heavy work starts
+      await new Promise((r) => setTimeout(r, 60));
       const d = new Date();
       const today = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
       // Small photos for the Gambar tab (thumbnails keep the file easy to send)

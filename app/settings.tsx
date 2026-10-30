@@ -3,9 +3,9 @@ import { useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from "react-native";
 import { PersonPicker } from "@/components/PersonPicker";
 import { Sheet } from "@/components/Sheet";
+import { useRestore } from "@/components/useRestore";
 import { Button, Choice, Field, Icon, Muted, Row, Screen, Section } from "@/components/ui";
 import { pickRestoreFiles, saveTextFile, shareFile, XLSX_MIME } from "@/lib/files";
-import { duplicatePairs } from "@/lib/merge";
 import { fullName } from "@/lib/model";
 import { IS_PREVIEW } from "@/lib/open-repo";
 import { useStore } from "@/lib/store";
@@ -41,7 +41,10 @@ export default function SettingsScreen() {
   const exportBackup = () =>
     run(async () => {
       const text = await store.backupText();
-      if (await saveTextFile(`waris-backup-${stamp()}.json`, text, "application/json")) Alert.alert(t("backup"), t("backupSaved"));
+      if (await saveTextFile(`waris-backup-${stamp()}.json`, text, "application/json")) {
+        store.markBackedUp();
+        Alert.alert(t("backup"), t("backupSaved"));
+      }
     });
 
   const shareBackup = (how: "share" | "save") =>
@@ -49,47 +52,19 @@ export default function SettingsScreen() {
       const text = await store.backupText({ photos: shareSize === "full", hideLiving });
       const name = `waris-${(graph.snapshot.familyName || "keluarga").replace(/[^\w-]+/g, "-").toLowerCase()}-${stamp()}.json`;
       setShareOpen(false);
-      if (how === "share") await shareFile(name, text, "application/json");
-      else if (await saveTextFile(name, text, "application/json")) Alert.alert(t("backup"), t("backupSaved"));
+      if (how === "share") {
+        if (await shareFile(name, text, "application/json")) store.markBackedUp();
+      } else if (await saveTextFile(name, text, "application/json")) {
+        store.markBackedUp();
+        Alert.alert(t("backup"), t("backupSaved"));
+      }
     });
 
+  const flow = useRestore(run);
   const restore = () =>
     run(async () => {
       const files = await pickRestoreFiles();
-      if (!files || (!files.excel && !files.texts.length)) return;
-      let n: number;
-      try {
-        n = store.peekBackup(files);
-      } catch {
-        Alert.alert(t("restoreBackup"), t("backupFailed"));
-        return;
-      }
-      const doRestore = (mode: "replace" | "merge") =>
-        run(async () => {
-          const r = await store.restore(files, mode);
-          router.dismissTo("/");
-          const photoNote = r.photos ? `\n${t("photosRestored", { n: r.photos })}` : "";
-          if (mode === "merge") {
-            Alert.alert(t("restoreBackup"), t("merged", { a: r.added, u: r.updated }) + photoNote);
-            // Same person typed separately by two relatives? Offer to join them.
-            if (r.added) setTimeout(() => router.push("/duplicates"), 300);
-          } else Alert.alert(t("restoreBackup"), t("restored", { n: r.total }) + photoNote);
-        });
-      // An empty tree has nothing to merge with
-      if (graph.size === 0) return doRestore("replace");
-      Alert.alert(t("restoreBackup"), t("restoreHow", { n }), [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("replace"),
-          style: "destructive",
-          onPress: () =>
-            Alert.alert(t("restoreBackup"), t("restoreQ", { n }), [
-              { text: t("cancel"), style: "cancel" },
-              { text: t("replace"), style: "destructive", onPress: () => doRestore("replace") },
-            ]),
-        },
-        { text: t("merge"), onPress: () => doRestore("merge") },
-      ]);
+      if (files && (files.excel || files.texts.length)) flow.choose(files);
     });
 
   const exportExcel = (how: "share" | "save") =>
@@ -97,8 +72,12 @@ export default function SettingsScreen() {
       const name = `salasilah-${(graph.snapshot.familyName || "waris").replace(/[^\w-]+/g, "-").toLowerCase()}-${stamp()}.xlsx`;
       const b64 = await store.excelBase64({ photos: excelPhotos });
       setExcelOpen(false);
-      if (how === "share") await shareFile(name, b64, XLSX_MIME, { base64: true });
-      else if (await saveTextFile(name, b64, XLSX_MIME, { base64: true })) Alert.alert(t("exportExcel"), t("backupSaved"));
+      if (how === "share") {
+        if (await shareFile(name, b64, XLSX_MIME, { base64: true })) store.markBackedUp();
+      } else if (await saveTextFile(name, b64, XLSX_MIME, { base64: true })) {
+        store.markBackedUp();
+        Alert.alert(t("exportExcel"), t("backupSaved"));
+      }
     });
 
   const exportGedcom = () =>
@@ -142,10 +121,7 @@ export default function SettingsScreen() {
           <Row title={t("needsLinking")} subtitle={t("needsLinkingDesc")} left={<Icon name="link" color={c.primary} />} onPress={() => router.push("/unlinked")} />
           <Row
             title={t("duplicates")}
-            subtitle={(() => {
-              const n = duplicatePairs(graph, store.notDuplicates).length;
-              return n ? `${n}` : t("noDuplicates");
-            })()}
+            subtitle={t("duplicatesShort")}
             left={<Icon name="people-alt" color={c.primary} />}
             onPress={() => router.push("/duplicates")}
           />
@@ -209,9 +185,15 @@ export default function SettingsScreen() {
         />
         <Muted style={{ marginTop: -6 }}>{t(excelPhotos ? "excelWithPhotosHint" : "excelNoPhotosHint")}</Muted>
         <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
-          <Button title={t("saveToPhone")} kind="secondary" icon="save-alt" onPress={() => exportExcel("save")} style={{ flex: 1 }} />
-          <Button title={t("shareNow")} icon="share" onPress={() => exportExcel("share")} style={{ flex: 1 }} />
+          <Button title={t("saveToPhone")} kind="secondary" icon="save-alt" onPress={() => exportExcel("save")} style={{ flex: 1 }} disabled={busy} />
+          <Button title={t("shareNow")} icon="share" onPress={() => exportExcel("share")} style={{ flex: 1 }} disabled={busy} />
         </View>
+        {busy ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14 }}>
+            <ActivityIndicator color={c.primary} />
+            <Muted>{t("preparingFile")}</Muted>
+          </View>
+        ) : null}
       </Sheet>
       <PersonPicker visible={pickHome} onClose={() => setPickHome(false)} onPick={(p) => store.setHome(p.id)} />
     </Screen>

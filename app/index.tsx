@@ -1,11 +1,12 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
 import { LifeBadge } from "@/components/TreeCard";
 import { Button, Icon, IconButton, Muted, Screen } from "@/components/ui";
+import { shareFile } from "@/lib/files";
 import { type Card, DEFAULT_OPTIONS, layoutTree } from "@/lib/layout";
 import { fullName } from "@/lib/model";
 import { useStore } from "@/lib/store";
@@ -13,7 +14,23 @@ import { useColors } from "@/lib/theme";
 
 export default function TreeScreen() {
   const c = useColors();
-  const { graph, focusId, setFocus, homeId, treeOptions, setTreeOptions, treeDrawn, t, notice, clearNotice } = useStore();
+  const store = useStore();
+  const { graph, focusId, setFocus, homeId, treeOptions, setTreeOptions, treeDrawn, t, notice, clearNotice } = store;
+  const [backingUp, setBackingUp] = useState(false);
+
+  // One tap: the full backup (with photos) goes to the share sheet, e.g. Google Drive
+  const backupNow = async () => {
+    setBackingUp(true);
+    try {
+      const text = await store.backupText({ photos: true });
+      const name = `waris-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      if (await shareFile(name, text, "application/json")) store.markBackedUp();
+    } catch (e) {
+      Alert.alert(t("backup"), t("somethingWrong", { msg: String((e as Error)?.message ?? e) }));
+    } finally {
+      setBackingUp(false);
+    }
+  };
   const canvas = useRef<TreeCanvasHandle>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [optsOpen, setOptsOpen] = useState(false);
@@ -75,7 +92,7 @@ export default function TreeScreen() {
   const hasParents = graph.parents(focus.id).length > 0;
 
   return (
-    <Screen title={title} subtitle={subtitle} left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />} right={header} bg={c.canvas}>
+    <Screen wide title={title} subtitle={subtitle} left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />} right={header} bg={c.canvas}>
       <ErrorBoundary
         fallback={(reset) => (
           <View style={styles.welcome}>
@@ -100,6 +117,21 @@ export default function TreeScreen() {
           <Text style={{ color: c.primaryText, flex: 1 }}>{notice}</Text>
           <Icon name="close" size={20} color={c.primaryText} />
         </Pressable>
+      ) : store.backupDue ? (
+        <View style={[styles.notice, { backgroundColor: c.surface, borderColor: c.focusRing, borderWidth: 1.5, flexDirection: "column", alignItems: "stretch" }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Icon name="cloud-upload" size={26} color={c.focusRing} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("backupRemindTitle")}</Text>
+              <Muted>{t("backupRemindBody", { n: store.changesSinceBackup })}</Muted>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+            <Button title={t("later")} kind="secondary" onPress={store.snoozeBackup} disabled={backingUp} style={{ flex: 1, height: 40 }} />
+            <Button title={t("backupNow")} icon="backup" onPress={backupNow} disabled={backingUp} style={{ flex: 1, height: 40 }} />
+          </View>
+          {backingUp ? <ActivityIndicator color={c.primary} style={{ marginTop: 8 }} /> : null}
+        </View>
       ) : null}
 
       <View style={styles.fabs}>

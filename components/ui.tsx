@@ -40,9 +40,12 @@ export function Screen({
   right,
   children,
   bg,
+  wide,
 }: {
   title: string;
   subtitle?: string;
+  /** Use the full width (the tree); other screens keep a readable width on tablets */
+  wide?: boolean;
   back?: boolean;
   home?: boolean;
   onHome?: () => void;
@@ -71,7 +74,9 @@ export function Screen({
           {right}
         </View>
       </View>
-      <View style={{ flex: 1, backgroundColor: bg ?? c.background }}>{children}</View>
+      <View style={{ flex: 1, backgroundColor: bg ?? c.background }}>
+        <View style={wide ? { flex: 1 } : styles.readable}>{children}</View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -223,6 +228,9 @@ export function Muted({ children, style }: { children: ReactNode; style?: object
 }
 
 export const sheetStyle = (c: Colors) => ({
+  width: "100%" as const,
+  maxWidth: 640,
+  alignSelf: "center" as const,
   backgroundColor: c.surface,
   borderTopLeftRadius: 18,
   borderTopRightRadius: 18,
@@ -231,6 +239,7 @@ export const sheetStyle = (c: Colors) => ({
 });
 
 const styles = StyleSheet.create({
+  readable: { flex: 1, width: "100%", maxWidth: 760, alignSelf: "center" },
   header: { height: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   titleBox: { flex: 1, marginLeft: 8 },
   title: { fontSize: 20, fontWeight: "600" },

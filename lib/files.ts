@@ -237,3 +237,15 @@ export async function cropSquare(p: PreparedPhoto, r: { x: number; y: number; si
   const out = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
   return out.uri;
 }
+
+/**
+ * A file opened with Waris from another app (WhatsApp, Files, Gmail): a Waris Excel
+ * file (zip) or a JSON backup. Reads content:// and file:// links.
+ */
+export async function readIncomingFile(uri: string): Promise<RestoreFiles> {
+  const b64 = await readBase64(uri);
+  // .xlsx is a zip: it starts with "PK\x03\x04", which is "UEsD" in base64
+  if (b64.startsWith("UEsD")) return { texts: [], excel: b64, images: [] };
+  const text = Platform.OS === "web" ? await (await fetch(uri)).text() : await FileSystem.readAsStringAsync(uri);
+  return { texts: [text], images: [] };
+}
