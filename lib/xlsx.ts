@@ -3,7 +3,8 @@ import { strToU8, zipSync } from "fflate";
 /**
  * Minimal .xlsx writer: inline strings, numbers, dates, formulas (with the value
  * already worked out, so phone viewers that don't calculate still show it), a fixed
- * set of styles, column widths, frozen header, filter and drop-down lists.
+ * set of styles, column widths, frozen header, filter, drop-down lists and pictures
+ * placed in cells.
  */
 
 export type Formula = { f: string; v?: string | number };
@@ -24,10 +25,26 @@ export interface SheetSpec {
   lists?: { sqref: string; values: string[] }[];
   tabColor?: string;
   rowHeights?: Record<number, number>;
+  /** Pictures, each with its top-left corner in a cell (0-based row/col) */
+  images?: SheetImage[];
 }
 
+export interface SheetImage {
+  row: number;
+  col: number;
+  data: Uint8Array;
+  ext: "jpeg" | "png";
+  /** Shown size in pixels */
+  width: number;
+  height: number;
+  /** Picture name inside the file (Waris uses the person's ID) */
+  name?: string;
+}
+
+const EMU = 9525; // 1 pixel at 96 dpi
+
 // ---- styles -------------------------------------------------------------------------
-const GREEN = "FF1B6B4A";
+const GREEN = "FF2E3F8F"; // Waris indigo
 const FONTS = [
   `<font><sz val="10"/><name val="Arial"/></font>`, // 0 normal
   `<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>`, // 1 header
@@ -42,7 +59,7 @@ const FILLS = [
   `<fill><patternFill patternType="none"/></fill>`,
   `<fill><patternFill patternType="gray125"/></fill>`,
   `<fill><patternFill patternType="solid"><fgColor rgb="${GREEN}"/><bgColor indexed="64"/></patternFill></fill>`, // 2 header
-  `<fill><patternFill patternType="solid"><fgColor rgb="FFEAF3EE"/><bgColor indexed="64"/></patternFill></fill>`, // 3 light green
+  `<fill><patternFill patternType="solid"><fgColor rgb="FFE8EBF7"/><bgColor indexed="64"/></patternFill></fill>`, // 3 light indigo
   `<fill><patternFill patternType="solid"><fgColor rgb="FFFFF8DC"/><bgColor indexed="64"/></patternFill></fill>`, // 4 input
 ];
 const BORDERS = [`<border><left/><right/><top/><bottom/><diagonal/></border>`, `<border><left/><right/><top/><bottom style="thin"><color rgb="FFD5D5D5"/></bottom><diagonal/></border>`];
@@ -128,6 +145,24 @@ function cellXml(ref: string, cell: Cell): string {
   return `<c r="${ref}"${sAttr} t="str">${f}<v>${esc(value.v ?? "")}</v></c>`;
 }
 
+function drawingXml(images: SheetImage[]): string {
+  const pics = images
+    .map((im, i) => {
+      const cx = Math.round(im.width * EMU);
+      const cy = Math.round(im.height * EMU);
+      return `<xdr:oneCellAnchor><xdr:from><xdr:col>${im.col}</xdr:col><xdr:colOff>${3 * EMU}</xdr:colOff><xdr:row>${im.row}</xdr:row><xdr:rowOff>${3 * EMU}</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${i + 2}" name="${esc(im.name ?? `Picture ${i + 1}`)}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${i + 1}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+    })
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${pics}</xdr:wsDr>`;
+}
+
+const rels = (items: { id: string; type: string; target: string }[]) =>
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${items
+    .map((x) => `<Relationship Id="${x.id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${x.type}" Target="${x.target}"/>`)
+    .join("")}</Relationships>`;
+
 function sheetXml(sh: SheetSpec): string {
   const rows = sh.rows
     .map((row, r) => {
@@ -149,7 +184,7 @@ function sheetXml(sh: SheetSpec): string {
         .join("")}</dataValidations>`
     : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${sh.tabColor ? `<sheetPr><tabColor rgb="FF${sh.tabColor}"/></sheetPr>` : ""}<sheetViews><sheetView workbookViewId="0" showGridLines="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols}<sheetData>${rows}</sheetData>${sh.autoFilter ? `<autoFilter ref="${sh.autoFilter}"/>` : ""}${lists}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape"/></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${sh.tabColor ? `<sheetPr><tabColor rgb="FF${sh.tabColor}"/></sheetPr>` : ""}<sheetViews><sheetView workbookViewId="0" showGridLines="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols}<sheetData>${rows}</sheetData>${sh.autoFilter ? `<autoFilter ref="${sh.autoFilter}"/>` : ""}${lists}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape"/>${sh.images?.length ? '<drawing r:id="rId1"/>' : ""}</worksheet>`;
 }
 
 /** Builds the .xlsx file bytes. */
@@ -157,8 +192,12 @@ export function buildXlsx(sheets: SheetSpec[]): Uint8Array {
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": strToU8(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets
-        .map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets
+        .map(
+          (s, i) =>
+            `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+            (s.images?.length ? `<Override PartName="/xl/drawings/drawing${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : ""),
+        )
         .join("")}</Types>`,
     ),
     "_rels/.rels": strToU8(
@@ -179,7 +218,20 @@ export function buildXlsx(sheets: SheetSpec[]): Uint8Array {
     ),
     "xl/styles.xml": strToU8(stylesXml()),
   };
-  sheets.forEach((s, i) => (files[`xl/worksheets/sheet${i + 1}.xml`] = strToU8(sheetXml(s))));
+  let media = 0;
+  sheets.forEach((s, i) => {
+    files[`xl/worksheets/sheet${i + 1}.xml`] = strToU8(sheetXml(s));
+    if (!s.images?.length) return;
+    files[`xl/worksheets/_rels/sheet${i + 1}.xml.rels`] = strToU8(rels([{ id: "rId1", type: "drawing", target: `../drawings/drawing${i + 1}.xml` }]));
+    files[`xl/drawings/drawing${i + 1}.xml`] = strToU8(drawingXml(s.images));
+    const targets = s.images.map((im) => {
+      media++;
+      const name = `image${media}.${im.ext}`;
+      files[`xl/media/${name}`] = im.data;
+      return name;
+    });
+    files[`xl/drawings/_rels/drawing${i + 1}.xml.rels`] = strToU8(rels(targets.map((t, k) => ({ id: `rId${k + 1}`, type: "image", target: `../media/${t}` }))));
+  });
   return zipSync(files, { level: 6 });
 }
 
@@ -195,4 +247,18 @@ export function toBase64(bytes: Uint8Array): string {
     out += B64[a >> 2] + B64[((a & 3) << 4) | ((b ?? 0) >> 4)] + (b === undefined ? "=" : B64[((b & 15) << 2) | ((c ?? 0) >> 6)]) + (c === undefined ? "=" : B64[c & 63]);
   }
   return out;
+}
+
+/** Bytes from base64 (no Buffer/atob needed). */
+export function fromBase64(b64: string): Uint8Array {
+  const clean = b64.replace(/[^A-Za-z0-9+/]/g, "");
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let o = 0;
+  for (let i = 0; i + 1 < clean.length; i += 4) {
+    const n = (B64.indexOf(clean[i]) << 18) | (B64.indexOf(clean[i + 1]) << 12) | ((i + 2 < clean.length ? B64.indexOf(clean[i + 2]) : 0) << 6) | (i + 3 < clean.length ? B64.indexOf(clean[i + 3]) : 0);
+    out[o++] = (n >> 16) & 255;
+    if (i + 2 < clean.length) out[o++] = (n >> 8) & 255;
+    if (i + 3 < clean.length) out[o++] = n & 255;
+  }
+  return out.slice(0, o);
 }

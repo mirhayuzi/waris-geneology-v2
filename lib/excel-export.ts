@@ -1,10 +1,10 @@
 import { relationLines } from "../components/relation";
-import { formatDate, parseStored } from "./dates";
+import { parseStored, toInput } from "./dates";
 import type { FamilyGraph } from "./graph";
 import type { TKey } from "./i18n";
 import { relationText } from "./kinship";
 import { fullName, type LinkKind, type Person, type UnionStatus } from "./model";
-import { type Cell, colName, type SheetSpec, type StyleName } from "./xlsx";
+import { type Cell, colName, type SheetImage, type SheetSpec, type StyleName } from "./xlsx";
 
 /**
  * The whole tree as an Excel workbook:
@@ -15,6 +15,7 @@ import { type Cell, colName, type SheetSpec, type StyleName } from "./xlsx";
  *  - Ahli           one row per person (the main data)
  *  - Perkahwinan    one row per marriage
  *  - Ibu_Bapa_Anak  one row per parent-child link
+ *  - Gambar         (optional) each person's photo next to their ID
  * Names and counts are formulas, so edits in Excel flow through; each formula also
  * carries its current value for viewers that don't calculate.
  */
@@ -29,11 +30,16 @@ export interface ExcelOptions {
   familyName?: string;
   /** For the "exported on" line (passed in so tests are stable) */
   today: string;
+  /** Small photos to put in the Gambar sheet, by person id */
+  photos?: Record<string, { data: Uint8Array; ext: "jpeg" | "png"; width: number; height: number }>;
 }
 
-const W = {
+export const W = {
   bm: {
-    sheets: { guide: "Panduan", outline: "Susur_Galur", summary: "Ringkasan", people: "Ahli", unions: "Perkahwinan", links: "Ibu_Bapa_Anak" },
+    sheets: { guide: "Panduan", outline: "Susur_Galur", summary: "Ringkasan", people: "Ahli", unions: "Perkahwinan", links: "Ibu_Bapa_Anak", photos: "Gambar" },
+    photosTitle: "Gambar Ahli",
+    photosSub: "Gambar setiap ahli mengikut ID. Bila fail ini diimport ke Waris, gambar dipulangkan kepada orang yang sama.",
+    photosCols: ["ID", "Nama penuh", "Gambar", "Fail gambar"],
     gens: ["Asal", "Anak", "Cucu", "Cicit", "Piut", "Piat", "Miut"],
     genN: (n: number) => `Gen. ${n}`,
     sex: { male: "L", female: "P" },
@@ -53,7 +59,7 @@ const W = {
     died: "Meninggal",
     peopleTitle: "Ahli Keluarga",
     peopleSub: "Satu baris seorang. Sel kuning boleh diubah; nama penuh, nama ibu bapa dan bilangan anak dikira sendiri.",
-    peopleCols: ["ID", "Nama penuh", "Gelaran", "Nama", "bin/binti\n(nama bapa)", "Nama keluarga", "Jantina\n(L/P)", "Status", "Tarikh lahir", "Tempat lahir", "Tarikh meninggal", "Tempat meninggal", "Tempat kubur", "ID Bapa", "Nama bapa", "ID Ibu", "Nama ibu", "Pasangan", "Bil. anak", "Jumlah keturunan", "HUBUNGAN", "Agama", "Bangsa", "Pekerjaan", "Telefon", "Catatan", "waris_id"],
+    peopleCols: ["ID", "Nama penuh", "Gelaran", "Nama", "bin/binti\n(nama bapa)", "Nama keluarga", "Jantina\n(L/P)", "Status", "Tarikh lahir", "Tempat lahir", "Tarikh meninggal", "Tempat meninggal", "Tempat kubur", "ID Bapa", "Nama bapa", "ID Ibu", "Nama ibu", "Pasangan", "Bil. anak", "Jumlah keturunan", "HUBUNGAN", "Agama", "Bangsa", "Pekerjaan", "Telefon", "Catatan", "Nama panggilan", "waris_id"],
     relationTo: (n: string) => `Hubungan dengan ${n}`,
     unionsTitle: "Perkahwinan",
     unionsSub: "Satu baris satu perkahwinan. Kahwin lebih sekali = lebih dari satu baris.",
@@ -90,6 +96,12 @@ const W = {
       ["Ahli", "Satu baris seorang — data utama. Nama penuh dengan bin/binti dibina sendiri."],
       ["Perkahwinan", "Satu baris satu perkahwinan. Kahwin semula = baris baharu."],
       ["Ibu_Bapa_Anak", "Satu baris setiap ibu atau bapa kepada anak. Inilah yang menyambung salasilah."],
+      ["Gambar", "(Jika dieksport dengan gambar) gambar setiap ahli di sebelah ID-nya."],
+      ["", ""],
+      ["IMPORT SEMULA", ""],
+      ["Ke Waris", "Tetapan → Pulihkan, pilih fail .xlsx ini. Pilih Gabung (tambah dan kemas kini) atau Ganti. Tab Susur_Galur dan Ringkasan hanya paparan — ubah data di Ahli, Perkahwinan dan Ibu_Bapa_Anak."],
+      ["Orang baharu", "Tambah baris di Ahli dengan ID baharu (cth. P0200), biarkan waris_id kosong. Sambungkan di Ibu_Bapa_Anak dan Perkahwinan menggunakan ID."],
+      ["Gambar ikut ID", "Gambar juga boleh dipilih bersama fail Excel jika nama failnya ialah ID (cth. P0012.jpg)."],
       ["", ""],
       ["KOD", ""],
       ["ID", "P0001 ahli · M0001 perkahwinan · R0001 hubungan anak. Jangan ubah ID yang sudah dipakai."],
@@ -106,7 +118,10 @@ const W = {
     ],
   },
   en: {
-    sheets: { guide: "Guide", outline: "Family_Outline", summary: "Summary", people: "People", unions: "Marriages", links: "Parents_Children" },
+    sheets: { guide: "Guide", outline: "Family_Outline", summary: "Summary", people: "People", unions: "Marriages", links: "Parents_Children", photos: "Photos" },
+    photosTitle: "Photos",
+    photosSub: "Each person's photo by ID. When this file is imported into Waris, photos go back to the same people.",
+    photosCols: ["ID", "Full name", "Photo", "Photo file"],
     gens: ["Root", "Children", "Grandchildren", "Great-grandch.", "2x great-gr.", "3x great-gr.", "4x great-gr."],
     genN: (n: number) => `Gen. ${n}`,
     sex: { male: "M", female: "F" },
@@ -126,7 +141,7 @@ const W = {
     died: "Died",
     peopleTitle: "Family Members",
     peopleSub: "One row per person. Yellow cells can be edited; full names, parent names and child counts are worked out.",
-    peopleCols: ["ID", "Full name", "Title", "Name", "bin/binti\n(father's name)", "Family name", "Sex\n(M/F)", "Status", "Born", "Birthplace", "Died", "Place of death", "Burial place", "Father ID", "Father", "Mother ID", "Mother", "Spouse", "Children", "Descendants", "RELATION", "Religion", "Ethnicity", "Occupation", "Phone", "Notes", "waris_id"],
+    peopleCols: ["ID", "Full name", "Title", "Name", "bin/binti\n(father's name)", "Family name", "Sex\n(M/F)", "Status", "Born", "Birthplace", "Died", "Place of death", "Burial place", "Father ID", "Father", "Mother ID", "Mother", "Spouse", "Children", "Descendants", "RELATION", "Religion", "Ethnicity", "Occupation", "Phone", "Notes", "Nickname", "waris_id"],
     relationTo: (n: string) => `Relation to ${n}`,
     unionsTitle: "Marriages",
     unionsSub: "One row per marriage. Someone married more than once has more than one row.",
@@ -163,6 +178,12 @@ const W = {
       ["People", "One row per person — the main data. Full names with bin/binti are built for you."],
       ["Marriages", "One row per marriage. Remarriage = another row."],
       ["Parents_Children", "One row for each parent of each child. These connect the tree."],
+      ["Photos", "(When exported with photos) each person's photo next to their ID."],
+      ["", ""],
+      ["IMPORTING BACK", ""],
+      ["Into Waris", "Settings → Restore, pick this .xlsx file. Choose Merge (add and update) or Replace. Family_Outline and Summary are views only — edit data in People, Marriages and Parents_Children."],
+      ["New people", "Add a row in People with a new ID (e.g. P0200) and leave waris_id empty. Connect them in Parents_Children and Marriages by ID."],
+      ["Photos by ID", "Photo files can also be picked together with the Excel file when they are named by ID (e.g. P0012.jpg)."],
       ["", ""],
       ["CODES", ""],
       ["ID", "P0001 person · M0001 marriage · R0001 parent link. Don't change IDs already in use."],
@@ -188,7 +209,9 @@ function dateCell(v: string | undefined, lang: "en" | "bm", style: StyleName = "
   const d = parseStored(v);
   if (!d) return { value: v ?? null, style: style === "inputDate" ? "input" : "text" };
   if (d.month && d.day && !d.approx) return { value: { date: [d.year, d.month, d.day] }, style };
-  return { value: formatDate(v, lang), style: style === "inputDate" ? "input" : "text" };
+  // Partial or approximate dates as typed in Waris ("3/1982", "~1950"), so they import back
+  void lang;
+  return { value: toInput(v), style: style === "inputDate" ? "input" : "text" };
 }
 
 export function buildFamilyWorkbook(graph: FamilyGraph, o: ExcelOptions): SheetSpec[] {
@@ -303,21 +326,22 @@ export function buildFamilyWorkbook(graph: FamilyGraph, o: ExcelOptions): SheetS
       { value: p.occupation, style: "input" },
       { value: p.phone, style: "input" },
       { value: p.notes, style: "input" },
+      { value: p.nickname, style: "input" },
       { value: p.id, style: "muted" },
     ]);
   });
   const peopleSheet: SheetSpec = {
     name: S.people,
     rows: peopleRows,
-    cols: [9, 32, 10, 20, 18, 12, 8, 9, 12, 14, 12, 14, 14, 9, 28, 9, 28, 30, 7, 10, 26, 10, 10, 14, 13, 28, 12].map((width, i) => ({ width, hidden: i === 26 })),
+    cols: [9, 32, 10, 20, 18, 12, 8, 9, 12, 14, 12, 14, 14, 9, 28, 9, 28, 30, 7, 10, 26, 10, 10, 14, 13, 28, 14, 12].map((width, i) => ({ width, hidden: i === 27 })),
     freeze: { rows: 4, cols: 2 },
-    autoFilter: `A4:${colName(25)}${lastPerson}`,
+    autoFilter: `A4:${colName(26)}${lastPerson}`,
     lists: [
       { sqref: `G${FIRST}:G${lastPerson + SPARE}`, values: [w.sex.male, w.sex.female] },
       { sqref: `H${FIRST}:H${lastPerson + SPARE}`, values: [w.alive, w.dead] },
     ],
     rowHeights: { 4: 30 },
-    tabColor: "8FBFA5",
+    tabColor: "9AA6D8",
   };
 
   // ---- Perkahwinan / Marriages -----------------------------------------------------
@@ -347,7 +371,7 @@ export function buildFamilyWorkbook(graph: FamilyGraph, o: ExcelOptions): SheetS
     freeze: { rows: 4 },
     lists: [{ sqref: `F${FIRST}:F${lastUnion + SPARE}`, values: Object.values(w.status) }],
     rowHeights: { 4: 30 },
-    tabColor: "8FBFA5",
+    tabColor: "9AA6D8",
   };
 
   // ---- Ibu_Bapa_Anak / Parents_Children ----------------------------------------------
@@ -375,7 +399,7 @@ export function buildFamilyWorkbook(graph: FamilyGraph, o: ExcelOptions): SheetS
     freeze: { rows: 4 },
     lists: [{ sqref: `G${FIRST}:G${linksSheetLast + SPARE}`, values: Object.values(w.kind) }],
     rowHeights: { 4: 30 },
-    tabColor: "8FBFA5",
+    tabColor: "9AA6D8",
   };
 
   // ---- Susur_Galur / Family_Outline ---------------------------------------------------
@@ -436,7 +460,7 @@ export function buildFamilyWorkbook(graph: FamilyGraph, o: ExcelOptions): SheetS
     ],
     freeze: { rows: 4 },
     rowHeights: { 4: 30 },
-    tabColor: "1B6B4A",
+    tabColor: "2E3F8F",
   };
 
   // ---- Ringkasan / Summary ----------------------------------------------------------
@@ -485,12 +509,36 @@ export function buildFamilyWorkbook(graph: FamilyGraph, o: ExcelOptions): SheetS
   lookup(w.mother, "Q", lp && graph.mother(lp.id) ? fullName(graph.mother(lp.id)!) : "");
   lookup(w.spouse, "R", lp ? graph.partners(lp.id).map((q) => fullName(q)).join("; ") : "");
   lookup(w.children, "S", lp ? graph.childLinksOf(lp.id).length : 0);
-  const summarySheet: SheetSpec = { name: S.summary, rows: sum, cols: [30, 34, 12, 12, 12, 12].map((width) => ({ width })), tabColor: "1B6B4A" };
+  const summarySheet: SheetSpec = { name: S.summary, rows: sum, cols: [30, 34, 12, 12, 12, 12].map((width) => ({ width })), tabColor: "2E3F8F" };
 
   // ---- Panduan / Guide --------------------------------------------------------------
   const guide: Cell[][] = [...head(w.guideTitle, w.guideSub)];
   for (const [a, b] of w.guide) guide.push(b ? [{ value: a, style: a === "Sel kuning" || a === "Yellow cells" ? "input" : "bold" }, { value: b, style: "wrap" }] : a ? [{ value: a, style: "section" }] : []);
-  const guideSheet: SheetSpec = { name: S.guide, rows: guide, cols: [{ width: 22 }, { width: 95 }], tabColor: "8FBFA5" };
+  const guideSheet: SheetSpec = { name: S.guide, rows: guide, cols: [{ width: 22 }, { width: 95 }], tabColor: "9AA6D8" };
 
-  return [guideSheet, outlineSheet, summarySheet, peopleSheet, unionSheet, linkSheet];
+  // ---- Gambar / Photos: the ID-to-photo matrix ----------------------------------------
+  const sheets = [guideSheet, outlineSheet, summarySheet, peopleSheet, unionSheet, linkSheet];
+  const withPhoto = peopleOrder.filter((p) => o.photos?.[p.id]);
+  if (withPhoto.length) {
+    const BOX = 72; // shown size in pixels
+    const photoRows: Cell[][] = [...head(w.photosTitle, w.photosSub), header(w.photosCols)];
+    const images: SheetImage[] = [];
+    const heights: Record<number, number> = { 4: 30 };
+    withPhoto.forEach((p, i) => {
+      const r = FIRST + i;
+      const ph = o.photos![p.id];
+      const scale = Math.min(BOX / ph.width, BOX / ph.height);
+      const id = pid.get(p.id)!;
+      photoRows.push([
+        { value: id, style: "bold" },
+        { value: nameOf(`A${r}`, p.id), style: p.living ? "text" : "dead" },
+        { value: null, style: "text" },
+        { value: `${id}.${ph.ext === "png" ? "png" : "jpg"}`, style: "muted" },
+      ]);
+      images.push({ row: r - 1, col: 2, data: ph.data, ext: ph.ext, width: Math.round(ph.width * scale), height: Math.round(ph.height * scale), name: id });
+      heights[r] = (BOX + 8) * 0.75; // points
+    });
+    sheets.push({ name: S.photos, rows: photoRows, cols: [9, 34, 12, 14].map((width) => ({ width })), freeze: { rows: 4 }, rowHeights: heights, images, tabColor: "9AA6D8" });
+  }
+  return sheets;
 }

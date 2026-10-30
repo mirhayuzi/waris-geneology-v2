@@ -10,7 +10,7 @@ const VERSION_CODE = 100 + (Number(process.env.BUILD_NUMBER) || 0);
 const config: ExpoConfig = {
   name: "Waris",
   slug: "waris-genealogy",
-  version: "2.0.0",
+  version: "2.1.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",
   scheme: "waris",
@@ -47,6 +47,14 @@ const config: ExpoConfig = {
     "expo-font",
     "expo-sqlite",
     ["expo-document-picker", { iCloudContainerEnvironment: "Production" }],
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "Allow Waris to use your photos for family member pictures",
+        cameraPermission: "Allow Waris to take family member pictures",
+        microphonePermission: false,
+      },
+    ],
     [
       "expo-splash-screen",
       {

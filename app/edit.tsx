@@ -4,10 +4,12 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleShee
 import { Avatar } from "@/components/Avatar";
 import { FatherField } from "@/components/FatherField";
 import { PersonPicker } from "@/components/PersonPicker";
+import { PhotoCropper } from "@/components/PhotoCropper";
+import { Sheet, SheetItem } from "@/components/Sheet";
 import { Button, Choice, Field, goHome, Icon, IconButton, Muted, Screen } from "@/components/ui";
 import { checkParent, makePerson, type Role, RuleError, suggestFatherName } from "@/lib/actions";
 import { parseInput, toInput, yearOf } from "@/lib/dates";
-import { deletePhoto, pickImage, photoUri } from "@/lib/files";
+import { deletePhoto, pickPhoto, photoUri, type PreparedPhoto, preparePhoto } from "@/lib/files";
 import { possibleDuplicates } from "@/lib/match";
 import { ETHNICITIES, fullName, type LinkKind, type Person, PREFIXES, RELIGIONS, type Sex, type UnionStatus } from "@/lib/model";
 import { useStore } from "@/lib/store";
@@ -97,6 +99,9 @@ export default function EditScreen() {
   const initial = useRef(JSON.stringify(f));
 
   const [photo, setPhoto] = useState<{ uri: string; mime?: string | null } | null | undefined>(undefined); // undefined = unchanged
+  const [photoMenu, setPhotoMenu] = useState(false);
+  const [cropping, setCropping] = useState<PreparedPhoto | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [more, setMore] = useState(!!editing && !!(editing.prefix || editing.religion || editing.ethnicity || editing.occupation || editing.notes || editing.nickname || editing.surname));
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -124,6 +129,20 @@ export default function EditScreen() {
   const parentRole = role === "father" || role === "mother" || role === "child" || role === "sibling";
 
   const shownPhoto = photo === undefined ? photoUri(editing?.photo) : photo?.uri;
+
+  // Pick (gallery / camera) or re-adjust the current photo, then crop it in a circle
+  const startPhoto = async (how: "gallery" | "camera" | "adjust") => {
+    setPhotoMenu(false);
+    setPhotoBusy(true);
+    try {
+      const p = how === "adjust" ? (shownPhoto ? await preparePhoto(shownPhoto) : null) : await pickPhoto(how);
+      if (p) setCropping(p);
+    } catch (e) {
+      Alert.alert(t("photo"), t("somethingWrong", { msg: String((e as Error)?.message ?? e) }));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const changeOtherParent = (id: string | undefined) => {
     setOtherParent(id);
@@ -285,12 +304,7 @@ export default function EditScreen() {
           ) : (
             <>
               <View style={styles.photoRow}>
-                <Pressable
-                  onPress={async () => {
-                    const img = await pickImage();
-                    if (img) setPhoto(img);
-                  }}
-                >
+                <Pressable onPress={() => setPhotoMenu(true)} disabled={photoBusy}>
                   {shownPhoto ? (
                     <Avatar person={{ ...(editing ?? makePerson({ givenName: "", sex: f.sex, living: true })), photo: shownPhoto }} size={84} />
                   ) : (
@@ -301,15 +315,8 @@ export default function EditScreen() {
                   </View>
                 </Pressable>
                 <View style={{ flex: 1, gap: 6 }}>
-                  <Button
-                    title={t("choosePhoto")}
-                    kind="secondary"
-                    onPress={async () => {
-                      const img = await pickImage();
-                      if (img) setPhoto(img);
-                    }}
-                  />
-                  {shownPhoto ? <Button title={t("removePhoto")} kind="plain" onPress={() => setPhoto(null)} /> : null}
+                  <Button title={t("choosePhoto")} kind="secondary" onPress={() => setPhotoMenu(true)} disabled={photoBusy} />
+                  {shownPhoto ? <Button title={t("adjustPhoto")} kind="plain" icon="crop" onPress={() => startPhoto("adjust")} disabled={photoBusy} /> : null}
                 </View>
               </View>
 
@@ -395,6 +402,30 @@ export default function EditScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       <PersonPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={setPicked} exclude={base ? [base.id] : []} />
+      <Sheet visible={photoMenu} onClose={() => setPhotoMenu(false)} title={t("photo")}>
+        <SheetItem icon="photo-library" label={t("fromGallery")} onPress={() => startPhoto("gallery")} />
+        <SheetItem icon="photo-camera" label={t("fromCamera")} onPress={() => startPhoto("camera")} />
+        {shownPhoto ? <SheetItem icon="crop" label={t("adjustPhoto")} onPress={() => startPhoto("adjust")} /> : null}
+        {shownPhoto ? (
+          <SheetItem
+            icon="delete-outline"
+            label={t("removePhoto")}
+            color={c.danger}
+            onPress={() => {
+              setPhotoMenu(false);
+              setPhoto(null);
+            }}
+          />
+        ) : null}
+      </Sheet>
+      <PhotoCropper
+        photo={cropping}
+        onCancel={() => setCropping(null)}
+        onDone={(uri) => {
+          setCropping(null);
+          setPhoto({ uri, mime: "image/jpeg" });
+        }}
+      />
     </Screen>
   );
 }

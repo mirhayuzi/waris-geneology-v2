@@ -116,14 +116,14 @@ export function printHtml(groups: { label: string; rows: PrintRow[] }[], l: Prin
 <style>
 @page { size: A4 landscape; margin: 14mm 12mm; }
 body { font-family: -apple-system, Roboto, "Segoe UI", sans-serif; color: #1d1d1d; font-size: 10.5pt; }
-h1 { font-size: 18pt; margin: 0 0 2px; color: #1B6B4A; }
+h1 { font-size: 18pt; margin: 0 0 2px; color: #2E3F8F; }
 .sub { color: #555; margin-bottom: 10px; }
 table { width: 100%; border-collapse: collapse; }
 thead { display: table-header-group; }
-th { background: #1B6B4A; color: #fff; text-align: left; padding: 5px 6px; font-weight: 600; font-size: 9.5pt; }
+th { background: #2E3F8F; color: #fff; text-align: left; padding: 5px 6px; font-weight: 600; font-size: 9.5pt; }
 td { padding: 4px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
 tr { page-break-inside: avoid; }
-tr.gen td { background: #EAF3EE; font-weight: 700; color: #1B6B4A; border-bottom: 1px solid #B9D6C5; padding-top: 7px; }
+tr.gen td { background: #E8EBF7; font-weight: 700; color: #2E3F8F; border-bottom: 1px solid #C3CAEA; padding-top: 7px; }
 .no { width: 28px; text-align: right; color: #777; }
 .num { text-align: right; }
 .name { font-weight: 600; }

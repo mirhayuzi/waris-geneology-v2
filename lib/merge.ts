@@ -21,6 +21,17 @@ export function prepareShare(s: FamilySnapshot, opts: { hideLiving: boolean }): 
 
 const empty = (v: unknown) => v === undefined || v === null || v === "";
 
+/** True when two records hold the same details, ignoring timestamps and empty fields. */
+function sameDetails(a: Person, b: Person): boolean {
+  const clean = (p: Person) =>
+    JSON.stringify(
+      Object.entries(p)
+        .filter(([k, v]) => k !== "createdAt" && k !== "updatedAt" && !empty(v))
+        .sort(([x], [y]) => x.localeCompare(y)),
+    );
+  return clean(a) === clean(b);
+}
+
 /** `base` with any empty field filled from `extra`. */
 function fillFrom(base: Person, extra: Person): Person {
   const out: Record<string, unknown> = { ...base };
@@ -61,7 +72,12 @@ export function mergeSnapshots(local: FamilySnapshot, incoming: FamilySnapshot):
     if (newer && inc.photo) usePhotos.add(inc.photo);
     else if (mine.photo) merged.photo = mine.photo;
     else if (inc.photo) usePhotos.add(inc.photo);
-    if (JSON.stringify(merged) !== JSON.stringify(mine)) updated++;
+    // Same details (ignoring timestamps): keep ours untouched, e.g. re-importing an unchanged Excel file
+    if (sameDetails(merged, mine)) {
+      persons.set(inc.id, mine);
+      continue;
+    }
+    updated++;
     persons.set(inc.id, merged);
   }
 

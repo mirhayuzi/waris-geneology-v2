@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from "react-
 import { PersonPicker } from "@/components/PersonPicker";
 import { Sheet } from "@/components/Sheet";
 import { Button, Choice, Field, Icon, Muted, Row, Screen, Section } from "@/components/ui";
-import { pickTextFiles, saveTextFile, shareFile, XLSX_MIME } from "@/lib/files";
+import { pickRestoreFiles, saveTextFile, shareFile, XLSX_MIME } from "@/lib/files";
 import { duplicatePairs } from "@/lib/merge";
 import { fullName } from "@/lib/model";
 import { IS_PREVIEW } from "@/lib/open-repo";
@@ -23,6 +23,8 @@ export default function SettingsScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareSize, setShareSize] = useState<"small" | "full">("small");
   const [hideLiving, setHideLiving] = useState(false);
+  const [excelOpen, setExcelOpen] = useState(false);
+  const [excelPhotos, setExcelPhotos] = useState(false);
   const home = graph.get(homeId);
 
   const run = async (fn: () => Promise<void>) => {
@@ -53,25 +55,25 @@ export default function SettingsScreen() {
 
   const restore = () =>
     run(async () => {
-      const files = await pickTextFiles();
-      if (!files.length) return;
-      const texts = files.map((f) => f.text);
+      const files = await pickRestoreFiles();
+      if (!files || (!files.excel && !files.texts.length)) return;
       let n: number;
       try {
-        n = store.peekBackup(texts);
+        n = store.peekBackup(files);
       } catch {
         Alert.alert(t("restoreBackup"), t("backupFailed"));
         return;
       }
       const doRestore = (mode: "replace" | "merge") =>
         run(async () => {
-          const r = await store.restore(texts, mode);
+          const r = await store.restore(files, mode);
           router.dismissTo("/");
+          const photoNote = r.photos ? `\n${t("photosRestored", { n: r.photos })}` : "";
           if (mode === "merge") {
-            Alert.alert(t("restoreBackup"), t("merged", { a: r.added, u: r.updated }));
+            Alert.alert(t("restoreBackup"), t("merged", { a: r.added, u: r.updated }) + photoNote);
             // Same person typed separately by two relatives? Offer to join them.
             if (r.added) setTimeout(() => router.push("/duplicates"), 300);
-          } else Alert.alert(t("restoreBackup"), t("restored", { n: r.total }));
+          } else Alert.alert(t("restoreBackup"), t("restored", { n: r.total }) + photoNote);
         });
       // An empty tree has nothing to merge with
       if (graph.size === 0) return doRestore("replace");
@@ -90,14 +92,14 @@ export default function SettingsScreen() {
       ]);
     });
 
-  const exportExcel = () => {
-    const name = `salasilah-${(graph.snapshot.familyName || "waris").replace(/[^\w-]+/g, "-").toLowerCase()}-${stamp()}.xlsx`;
-    Alert.alert(t("exportExcel"), t("exportExcelDesc"), [
-      { text: t("cancel"), style: "cancel" },
-      { text: t("saveToPhone"), onPress: () => run(async () => void (await saveTextFile(name, store.excelBase64(), XLSX_MIME, { base64: true }))) },
-      { text: t("shareNow"), onPress: () => run(async () => void (await shareFile(name, store.excelBase64(), XLSX_MIME, { base64: true }))) },
-    ]);
-  };
+  const exportExcel = (how: "share" | "save") =>
+    run(async () => {
+      const name = `salasilah-${(graph.snapshot.familyName || "waris").replace(/[^\w-]+/g, "-").toLowerCase()}-${stamp()}.xlsx`;
+      const b64 = await store.excelBase64({ photos: excelPhotos });
+      setExcelOpen(false);
+      if (how === "share") await shareFile(name, b64, XLSX_MIME, { base64: true });
+      else if (await saveTextFile(name, b64, XLSX_MIME, { base64: true })) Alert.alert(t("exportExcel"), t("backupSaved"));
+    });
 
   const exportGedcom = () =>
     Alert.alert(t("exportGedcom"), t("gedcomLiving"), [
@@ -163,7 +165,7 @@ export default function SettingsScreen() {
           </View>
           <Row title={t("exportBackup")} left={<Icon name="save-alt" color={c.primary} />} onPress={exportBackup} />
           <Row title={t("restoreBackup")} subtitle={t("restoreDesc")} left={<Icon name="restore" color={c.primary} />} onPress={restore} />
-          <Row title={t("exportExcel")} subtitle={t("exportExcelDesc")} left={<Icon name="grid-on" color={c.primary} />} onPress={exportExcel} />
+          <Row title={t("exportExcel")} subtitle={t("exportExcelDesc")} left={<Icon name="grid-on" color={c.primary} />} onPress={() => setExcelOpen(true)} />
           <Row title={t("exportGedcom")} subtitle={t("gedcomDesc")} left={<Icon name="ios-share" color={c.primary} />} onPress={exportGedcom} last />
         </Section>
 
@@ -193,6 +195,22 @@ export default function SettingsScreen() {
         <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
           <Button title={t("saveToPhone")} kind="secondary" icon="save-alt" onPress={() => shareBackup("save")} style={{ flex: 1 }} />
           <Button title={t("shareNow")} icon="share" onPress={() => shareBackup("share")} style={{ flex: 1 }} />
+        </View>
+      </Sheet>
+      <Sheet visible={excelOpen} onClose={() => setExcelOpen(false)} title={t("exportExcel")}>
+        <Muted style={{ marginBottom: 12 }}>{t("exportExcelDesc")}</Muted>
+        <Choice
+          value={excelPhotos ? "yes" : "no"}
+          onChange={(v) => setExcelPhotos(v === "yes")}
+          options={[
+            { value: "no", label: t("excelNoPhotos") },
+            { value: "yes", label: t("excelWithPhotos") },
+          ]}
+        />
+        <Muted style={{ marginTop: -6 }}>{t(excelPhotos ? "excelWithPhotosHint" : "excelNoPhotosHint")}</Muted>
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+          <Button title={t("saveToPhone")} kind="secondary" icon="save-alt" onPress={() => exportExcel("save")} style={{ flex: 1 }} />
+          <Button title={t("shareNow")} icon="share" onPress={() => exportExcel("share")} style={{ flex: 1 }} />
         </View>
       </Sheet>
       <PersonPicker visible={pickHome} onClose={() => setPickHome(false)} onPick={(p) => store.setHome(p.id)} />

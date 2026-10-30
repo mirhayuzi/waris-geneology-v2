@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { addRelative as addRelativeAction, type RelativeRequest } from "./actions";
-import { buildBackup, parseBackupFiles } from "./backup";
-import { deletePhoto, photoExists, readPhotoBase64, savePhotoFrom, writePhotoBase64 } from "./files";
+import { buildBackup, type ParsedBackup, parseBackupFiles } from "./backup";
+import { excelToBackup } from "./excel-import";
+import { deletePhoto, photoExists, photoThumbnail, readPhotoBase64, type RestoreFiles, savePhotoFrom, writePhotoBase64 } from "./files";
 import { buildFamilyWorkbook } from "./excel-export";
 import { toGedcom } from "./gedcom";
 import { FamilyGraph } from "./graph";
@@ -10,7 +11,8 @@ import { defaultLang, type Lang, translate, type TKey } from "./i18n";
 import { DEFAULT_OPTIONS, type LayoutOptions } from "./layout";
 import { convertLegacy, LEGACY_KEY, type LegacyData } from "./legacy";
 import { joinPersons, mergeSnapshots, pairKey, prepareShare } from "./merge";
-import { buildXlsx, toBase64 } from "./xlsx";
+import { buildXlsx, fromBase64, toBase64 } from "./xlsx";
+import { readXlsx } from "./xlsx-read";
 import { type FamilySnapshot, nowIso, type Person, type Union } from "./model";
 import { openRepo } from "./open-repo";
 import { META, type Repo } from "./repo";
@@ -54,15 +56,16 @@ interface Store {
   /** Backup JSON. Default is the full file with photos; sharing can leave photos or living details out. */
   backupText: (opts?: { photos?: boolean; hideLiving?: boolean }) => Promise<string>;
   /** Restore from a Waris JSON backup or the old app's CSV files, replacing or merging */
-  restore: (texts: string[], mode?: "replace" | "merge") => Promise<{ total: number; added: number; updated: number }>;
+  /** Restore from a Waris JSON backup, a Waris Excel file (+ photos named by ID) or the old app's CSV files */
+  restore: (files: RestoreFiles, mode?: "replace" | "merge") => Promise<{ total: number; added: number; updated: number; photos: number }>;
   /** Make two records of the same person into one */
   joinPersons: (keepId: string, dropId: string) => Promise<void>;
   notDuplicates: Set<string>;
   markNotDuplicate: (a: string, b: string) => Promise<void>;
-  peekBackup: (texts: string[]) => number;
+  peekBackup: (files: RestoreFiles) => number;
   gedcom: (includeLiving: boolean) => string;
   /** The whole tree as an Excel workbook, base64-encoded for saving */
-  excelBase64: () => string;
+  excelBase64: (opts?: { photos?: boolean }) => Promise<string>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -81,6 +84,16 @@ async function applyLegacyPhotos(s: FamilySnapshot, photos: Record<string, strin
     const src = photos[p.id];
     p.photo = src ? await importLegacyPhoto(src, p.id) : undefined;
   }
+}
+
+/** Reads picked Restore files: an Excel file if there is one, otherwise backup JSON or old CSV files. */
+function parseRestore(files: RestoreFiles): { parsed: ParsedBackup; photos: number } {
+  if (files.excel) {
+    const r = excelToBackup(readXlsx(fromBase64(files.excel)), { images: files.images });
+    return { parsed: r.parsed, photos: r.photos };
+  }
+  const parsed = parseBackupFiles(files.texts);
+  return { parsed, photos: Object.keys(parsed.photos).length };
 }
 
 /** Moves data from the previous app version (AsyncStorage JSON) into SQLite, once. */
@@ -291,9 +304,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       return JSON.stringify(buildBackup(data, photos, { photosIncluded: withPhotos, livingHidden: !!opts.hideLiving }));
     },
-    peekBackup: (texts) => parseBackupFiles(texts).data.persons.length,
-    restore: async (texts, mode = "replace") => {
-      const parsed = parseBackupFiles(texts);
+    peekBackup: (files) => parseRestore(files).parsed.data.persons.length,
+    restore: async (files, mode = "replace") => {
+      const { parsed, photos: photoCount } = parseRestore(files);
       let data = parsed.data;
       let added = data.persons.length;
       let updated = 0;
@@ -304,6 +317,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         added = m.added;
         updated = m.updated;
         wanted = m.usePhotos;
+      } else {
+        // Replace: keep this phone's photo for anyone the file has no photo for, and keep
+        // the home person and family name when the file doesn't set them (e.g. Excel)
+        const mine = new Map(snapshot.persons.map((p) => [p.id, p]));
+        for (const p of data.persons) if (!p.photo && mine.get(p.id)?.photo) p.photo = mine.get(p.id)!.photo;
+        if (!data.homePersonId && snapshot.homePersonId && mine.has(snapshot.homePersonId) && data.persons.some((p) => p.id === snapshot.homePersonId)) data.homePersonId = snapshot.homePersonId;
+        if (!data.familyName) data.familyName = snapshot.familyName;
       }
       // Photos: write the ones the file carries; keep ones already on this phone; drop the rest
       for (const p of data.persons) {
@@ -318,7 +338,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       await repo().replaceAll(data);
       const s = await reload();
       setFocusId(s.homePersonId ?? s.persons[0]?.id);
-      return { total: data.persons.length, added, updated };
+      return { total: data.persons.length, added, updated, photos: photoCount };
     },
     joinPersons: async (keepId, dropId) => {
       await repo().replaceAll(joinPersons(await repo().load(), keepId, dropId));
@@ -333,10 +353,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       await repo().setMeta(META.notDuplicates, JSON.stringify([...next]));
     },
     gedcom: (includeLiving) => toGedcom(snapshot, { includeLiving }),
-    excelBase64: () => {
+    excelBase64: async (opts = {}) => {
       const d = new Date();
       const today = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-      const sheets = buildFamilyWorkbook(graph, { lang, t, homeId: snapshot.homePersonId, customTerms, familyName: snapshot.familyName, today });
+      // Small photos for the Gambar tab (thumbnails keep the file easy to send)
+      const photos: Record<string, { data: Uint8Array; ext: "jpeg"; width: number; height: number }> = {};
+      if (opts.photos) {
+        for (const p of snapshot.persons) {
+          if (!p.photo) continue;
+          const th = await photoThumbnail(p.photo);
+          if (th) photos[p.id] = { data: fromBase64(th.base64), ext: "jpeg", width: th.width, height: th.height };
+        }
+      }
+      const sheets = buildFamilyWorkbook(graph, { lang, t, homeId: snapshot.homePersonId, customTerms, familyName: snapshot.familyName, today, photos });
       return toBase64(buildXlsx(sheets));
     },
   };
