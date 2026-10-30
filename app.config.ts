@@ -42,11 +42,19 @@ const config: ExpoConfig = {
       {
         action: "VIEW",
         category: ["DEFAULT"],
+        // WhatsApp and Telegram often label .json files as generic binary or plain text,
+        // so those types are accepted too; anything that isn't a Waris file is refused
+        // politely on the Open screen
         data: [
           { scheme: "content", mimeType: "application/json" },
           { scheme: "content", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+          { scheme: "content", mimeType: "application/octet-stream" },
+          { scheme: "content", mimeType: "text/plain" },
+          { scheme: "content", mimeType: "text/json" },
           { scheme: "file", mimeType: "application/json" },
           { scheme: "file", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+          { scheme: "file", mimeType: "application/octet-stream" },
+          { scheme: "file", mimeType: "text/plain" },
         ],
       },
     ],
