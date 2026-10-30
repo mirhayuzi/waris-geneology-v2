@@ -10,7 +10,7 @@ const VERSION_CODE = 100 + (Number(process.env.BUILD_NUMBER) || 0);
 const config: ExpoConfig = {
   name: "Waris",
   slug: "waris-genealogy",
-  version: "2.3.0",
+  version: "2.3.1",
   // Tablets may rotate; phones are locked to portrait at start-up (app/_layout.tsx)
   orientation: "default",
   icon: "./assets/images/icon.png",

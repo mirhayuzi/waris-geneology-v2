@@ -126,56 +126,163 @@ const toPerson = (r: PersonRow): Person => ({
  * the old row, and ON DELETE CASCADE then wipes the person's marriages and parent links.
  */
 function upsertSql(table: string, cols: string[]): string {
-  const sets = cols.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ");
+  const sets = cols
+    .filter((c) => c !== "id")
+    .map((c) => `${c} = excluded.${c}`)
+    .join(", ");
   return `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(",")})
   ON CONFLICT(id) DO UPDATE SET ${sets}`;
 }
 
 const PERSON_SQL = upsertSql("person", [
-  "id", "given_name", "prefix", "father_name", "surname", "nickname", "sex", "living", "birth_date", "birth_place",
-  "death_date", "death_place", "burial_place", "religion", "ethnicity", "occupation", "phone", "photo", "notes",
-  "created_at", "updated_at",
+  "id",
+  "given_name",
+  "prefix",
+  "father_name",
+  "surname",
+  "nickname",
+  "sex",
+  "living",
+  "birth_date",
+  "birth_place",
+  "death_date",
+  "death_place",
+  "burial_place",
+  "religion",
+  "ethnicity",
+  "occupation",
+  "phone",
+  "photo",
+  "notes",
+  "created_at",
+  "updated_at",
 ]);
 const personParams = (p: Person) => [
-  p.id, p.givenName, p.prefix ?? null, p.fatherName ?? null, p.surname ?? null, p.nickname ?? null, p.sex,
-  p.living ? 1 : 0, p.birthDate ?? null, p.birthPlace ?? null, p.deathDate ?? null, p.deathPlace ?? null,
-  p.burialPlace ?? null, p.religion ?? null, p.ethnicity ?? null, p.occupation ?? null, p.phone ?? null,
-  p.photo ?? null, p.notes ?? null, p.createdAt, p.updatedAt,
+  p.id,
+  p.givenName,
+  p.prefix ?? null,
+  p.fatherName ?? null,
+  p.surname ?? null,
+  p.nickname ?? null,
+  p.sex,
+  p.living ? 1 : 0,
+  p.birthDate ?? null,
+  p.birthPlace ?? null,
+  p.deathDate ?? null,
+  p.deathPlace ?? null,
+  p.burialPlace ?? null,
+  p.religion ?? null,
+  p.ethnicity ?? null,
+  p.occupation ?? null,
+  p.phone ?? null,
+  p.photo ?? null,
+  p.notes ?? null,
+  p.createdAt,
+  p.updatedAt,
 ];
 
-const UNION_SQL = upsertSql("family_union", [
-  "id", "partner_a", "partner_b", "status", "start_date", "end_date", "place", "notes", "sort_order",
-]);
+const UNION_SQL = upsertSql("family_union", ["id", "partner_a", "partner_b", "status", "start_date", "end_date", "place", "notes", "sort_order"]);
 const unionParams = (u: Union) => [
-  u.id, u.partnerA, u.partnerB, u.status, u.startDate ?? null, u.endDate ?? null, u.place ?? null, u.notes ?? null, u.sortOrder,
+  u.id,
+  u.partnerA,
+  u.partnerB,
+  u.status,
+  u.startDate ?? null,
+  u.endDate ?? null,
+  u.place ?? null,
+  u.notes ?? null,
+  u.sortOrder,
 ];
 
 const LINK_SQL = `INSERT INTO parent_child (id, parent_id, child_id, kind) VALUES (?,?,?,?)
   ON CONFLICT(parent_id, child_id) DO UPDATE SET kind = excluded.kind`;
 
+/**
+ * Android can close the database under the app (e.g. when the phone is low on memory and
+ * the app was in the background behind the camera or gallery). Every later call then fails
+ * with "NativeDatabase.prepareAsync has been rejected ... NullPointerException". When that
+ * happens we open the database again and retry once; the data on disk is untouched.
+ */
+export function isClosedDbError(e: unknown): boolean {
+  const msg = String((e as Error)?.message ?? e);
+  return /NullPointerException|database is closed|has been closed|Access to closed resource|NativeDatabase\.\w+' has been rejected/i.test(msg);
+}
+
 export class SqliteRepo implements Repo {
-  private constructor(private db: Db) {}
+  private db: Db;
+  private reopening?: Promise<void>;
+
+  private constructor(
+    db: Db,
+    private name: string,
+  ) {
+    this.db = this.guard(db);
+  }
 
   static async open(name = "waris.db"): Promise<SqliteRepo> {
     const db = await SQLite.openDatabaseAsync(name);
     await migrate(db);
-    return new SqliteRepo(db);
+    return new SqliteRepo(db, name);
+  }
+
+  /** Wraps the database so each call reopens it and retries once if Android closed it. */
+  private guard(raw: Db): Db {
+    let current = raw;
+    const reopen = async (failed: Db) => {
+      if (current !== failed) return; // someone already reopened it
+      this.reopening ??= (async () => {
+        const fresh = await SQLite.openDatabaseAsync(this.name, { useNewConnection: true });
+        await fresh.execAsync("PRAGMA foreign_keys = ON;");
+        current = fresh;
+      })().finally(() => (this.reopening = undefined));
+      await this.reopening;
+    };
+    return new Proxy(raw, {
+      get: (_t, prop) => {
+        const value = (current as unknown as Record<PropertyKey, unknown>)[prop];
+        if (typeof value !== "function") return value;
+        return async (...args: unknown[]) => {
+          const used = current;
+          try {
+            return await (used as unknown as Record<PropertyKey, (...a: unknown[]) => Promise<unknown>>)[prop](...args);
+          } catch (e) {
+            if (!isClosedDbError(e)) throw e;
+            await reopen(used);
+            return (current as unknown as Record<PropertyKey, (...a: unknown[]) => Promise<unknown>>)[prop](...args);
+          }
+        };
+      },
+    }) as Db;
   }
 
   async load(): Promise<FamilySnapshot> {
     const persons = (await this.db.getAllAsync<PersonRow>("SELECT * FROM person")).map(toPerson);
     const unions = (
       await this.db.getAllAsync<{
-        id: string; partner_a: string; partner_b: string; status: Union["status"];
-        start_date: string | null; end_date: string | null; place: string | null; notes: string | null; sort_order: number;
+        id: string;
+        partner_a: string;
+        partner_b: string;
+        status: Union["status"];
+        start_date: string | null;
+        end_date: string | null;
+        place: string | null;
+        notes: string | null;
+        sort_order: number;
       }>("SELECT * FROM family_union")
     ).map((r) => ({
-      id: r.id, partnerA: r.partner_a, partnerB: r.partner_b, status: r.status, startDate: n(r.start_date),
-      endDate: n(r.end_date), place: n(r.place), notes: n(r.notes), sortOrder: r.sort_order,
+      id: r.id,
+      partnerA: r.partner_a,
+      partnerB: r.partner_b,
+      status: r.status,
+      startDate: n(r.start_date),
+      endDate: n(r.end_date),
+      place: n(r.place),
+      notes: n(r.notes),
+      sortOrder: r.sort_order,
     }));
-    const links = (
-      await this.db.getAllAsync<{ id: string; parent_id: string; child_id: string; kind: ParentLink["kind"] }>("SELECT * FROM parent_child")
-    ).map((r) => ({ id: r.id, parentId: r.parent_id, childId: r.child_id, kind: r.kind }));
+    const links = (await this.db.getAllAsync<{ id: string; parent_id: string; child_id: string; kind: ParentLink["kind"] }>("SELECT * FROM parent_child")).map(
+      (r) => ({ id: r.id, parentId: r.parent_id, childId: r.child_id, kind: r.kind }),
+    );
     return {
       persons,
       unions,

@@ -7,13 +7,22 @@ import { family } from "./fixture";
 // (loaded with require: Vite does not know the node:sqlite built-in)
 vi.mock("expo-sqlite", () => {
   const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as { DatabaseSync: typeof DatabaseSyncT };
+  // Simulates Android closing the database under the app: old connections then fail like expo-sqlite does
+  const killed = new Set<unknown>();
+  (globalThis as Record<string, unknown>).__closeAllDbs = () => opened.forEach((o) => killed.add(o));
+  const opened: unknown[] = [];
+  let last: DatabaseSyncT | undefined;
   const wrap = (db: DatabaseSyncT) => {
+    const alive = () => {
+      if (killed.has(api)) throw new Error("Call to function 'NativeDatabase.prepareAsync' has been rejected.\n→ Caused by: java.lang.NullPointerException");
+    };
     const api = {
-      execAsync: async (sql: string) => db.exec(sql),
-      runAsync: async (sql: string, params: unknown[] = []) => db.prepare(sql).run(...(params as never[])),
-      getAllAsync: async (sql: string, params: unknown[] = []) => db.prepare(sql).all(...(params as never[])),
-      getFirstAsync: async (sql: string, params: unknown[] = []) => db.prepare(sql).get(...(params as never[])) ?? null,
+      execAsync: async (sql: string) => (alive(), db.exec(sql)),
+      runAsync: async (sql: string, params: unknown[] = []) => (alive(), db.prepare(sql).run(...(params as never[]))),
+      getAllAsync: async (sql: string, params: unknown[] = []) => (alive(), db.prepare(sql).all(...(params as never[]))),
+      getFirstAsync: async (sql: string, params: unknown[] = []) => (alive(), db.prepare(sql).get(...(params as never[])) ?? null),
       withExclusiveTransactionAsync: async (fn: (tx: unknown) => Promise<void>) => {
+        alive();
         db.exec("BEGIN");
         try {
           await fn(api);
@@ -24,9 +33,14 @@ vi.mock("expo-sqlite", () => {
         }
       },
     };
+    opened.push(api);
     return api;
   };
-  return { openDatabaseAsync: async () => wrap(new DatabaseSync(":memory:")) };
+  return {
+    // a "new connection" reaches the same database file; otherwise each test gets a fresh one
+    openDatabaseAsync: async (_name: string, o?: { useNewConnection?: boolean }) =>
+      wrap(o?.useNewConnection && last ? last : (last = new DatabaseSync(":memory:"))),
+  };
 });
 
 const { SqliteRepo } = await import("../repo-sqlite");
@@ -64,5 +78,18 @@ describe("SqliteRepo", () => {
     const after = await repo.load();
     expect(after.unions.find((u) => u.id === before.unions[0].id)?.status).toBe("divorced");
     expect(after.links.length).toBe(before.links.length);
+  });
+
+  it("opens the database again when Android has closed it, and the save still works", async () => {
+    const repo = await SqliteRepo.open();
+    const snap = family();
+    await repo.replaceAll(snap);
+    (globalThis as unknown as { __closeAllDbs: () => void }).__closeAllDbs();
+    const kid = { ...snap.persons[0], id: "nur", givenName: "Nur Farhana", sex: "female" as const };
+    await repo.savePerson(kid);
+    await repo.saveLink({ id: "mirhayuzi>nur", parentId: "mirhayuzi", childId: "nur", kind: "birth" });
+    const after = await repo.load();
+    expect(after.persons.length).toBe(snap.persons.length + 1);
+    expect(after.links.some((l) => l.childId === "nur")).toBe(true);
   });
 });
