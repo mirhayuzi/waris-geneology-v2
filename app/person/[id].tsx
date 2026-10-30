@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
+import { relationLines } from "@/components/relation";
 import { lifespan } from "@/components/TreeCard";
 import { Button, Icon, IconButton, Muted, Row, Screen, Section } from "@/components/ui";
 import { ageAt, formatDate } from "@/lib/dates";
-import { relationships } from "@/lib/kinship";
+import { relationText } from "@/lib/kinship";
 import { fullName, type Person } from "@/lib/model";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
@@ -13,8 +15,10 @@ export default function ProfileScreen() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const store = useStore();
-  const { graph, t, lang, homeId } = store;
+  const { graph, t, lang, homeId, customTerms } = store;
   const p = graph.get(id);
+  const [allKinds, setAllKinds] = useState(false);
+  const [openGen, setOpenGen] = useState<number>();
   if (!p) {
     return (
       <Screen title="" back>
@@ -24,8 +28,14 @@ export default function ProfileScreen() {
   }
 
   const home = graph.get(homeId);
-  const kin = home && home.id !== p.id ? relationships(graph, home.id, p.id) : [];
-  const kinText = (k: { en: string; bm: string }) => (lang === "bm" ? `${k.bm} (${k.en})` : `${k.en} (${k.bm})`);
+  const rel = home && home.id !== p.id ? relationText(graph, home.id, p.id, customTerms) : null;
+  const relLines = rel ? relationLines(rel, lang, t) : null;
+
+  // Descendants: anak, cucu, cicit, piut ...
+  const gens = graph.descendantsByGeneration(p.id, { includeNonBirth: allKinds });
+  const genNames = t("genNames").split(",");
+  const genName = (i: number) => genNames[i] ?? t("genN", { n: i + 1 });
+  const totalDesc = gens.reduce((n, g) => n + g.length, 0);
 
   const parentLinks = graph.parentLinksOf(p.id);
   const unions = graph.unions(p.id);
@@ -92,10 +102,13 @@ export default function ProfileScreen() {
               <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>{t("isHome")}</Text>
             </View>
           ) : null}
-          {kin.length ? (
-            <Text style={[styles.kin, { color: c.primary }]}>
-              {t("relationToHome", { name: home!.givenName })}: {kin.map(kinText).join(" · ")}
-            </Text>
+          {relLines ? (
+            <>
+              <Text style={[styles.kin, { color: c.primary }]}>
+                {t("relationToHome", { name: home!.givenName })}: {relLines.main}
+              </Text>
+              {relLines.sub ? <Muted style={{ textAlign: "center" }}>{relLines.sub}</Muted> : null}
+            </>
           ) : home && home.id !== p.id ? (
             <Muted style={{ marginTop: 8 }}>{t("notRelated")}</Muted>
           ) : null}
@@ -118,6 +131,37 @@ export default function ProfileScreen() {
             {facts.map(([k, v], i) => (
               <Row key={k} title={v} subtitle={k} last={i === facts.length - 1} />
             ))}
+          </Section>
+        ) : null}
+
+        {totalDesc || graph.childLinksOf(p.id).length ? (
+          <Section title={t("descendants")}>
+            <View style={styles.genRow}>
+              {gens.map((g, i) => {
+                const on = openGen === i;
+                return (
+                  <Pressable
+                    key={i}
+                    onPress={() => setOpenGen(on ? undefined : i)}
+                    style={[styles.genChip, { borderColor: on ? c.primary : c.border, backgroundColor: on ? c.primary : c.surface }]}
+                  >
+                    <Text style={[styles.genNum, { color: on ? c.primaryText : c.text }]}>{g.length}</Text>
+                    <Text style={{ color: on ? c.primaryText : c.muted, fontSize: 12 }}>{genName(i)}</Text>
+                  </Pressable>
+                );
+              })}
+              <View style={[styles.genChip, { borderColor: "transparent" }]}>
+                <Text style={[styles.genNum, { color: c.primary }]}>{totalDesc}</Text>
+                <Text style={{ color: c.muted, fontSize: 12 }}>{t("total")}</Text>
+              </View>
+            </View>
+            {openGen !== undefined && gens[openGen]
+              ? gens[openGen].map((q) => personRow(q, lifespan(q, t)))
+              : null}
+            <View style={[styles.optRow, { borderTopColor: c.border }]}>
+              <Text style={{ color: c.muted, fontSize: 13, flex: 1 }}>{t("includeNonBirth")}</Text>
+              <Switch value={allKinds} onValueChange={setAllKinds} trackColor={{ true: c.primary }} />
+            </View>
           </Section>
         ) : null}
 
@@ -201,4 +245,8 @@ const styles = StyleSheet.create({
   badge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
   kin: { marginTop: 10, fontSize: 15, fontWeight: "600", textAlign: "center" },
   actions: { flexDirection: "row", gap: 10, marginTop: 16 },
+  genRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 12 },
+  genChip: { minWidth: 64, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, alignItems: "center" },
+  genNum: { fontSize: 20, fontWeight: "700" },
+  optRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth },
 });

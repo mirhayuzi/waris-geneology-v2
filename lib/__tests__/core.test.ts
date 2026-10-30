@@ -3,7 +3,8 @@ import { buildBackup, parseBackup } from "../backup";
 import { ageAt, formatDate, parseInput, toInput } from "../dates";
 import { toGedcom } from "../gedcom";
 import { FamilyGraph } from "../graph";
-import { relationships } from "../kinship";
+import { connectionPath, describePath, describeVia, familySide, relationships } from "../kinship";
+import { fatherCandidates, possibleDuplicates } from "../match";
 import { DEFAULT_OPTIONS, layoutTree } from "../layout";
 import { convertLegacy } from "../legacy";
 import { fullName } from "../model";
@@ -222,5 +223,77 @@ describe("gedcom", () => {
     const ged = toGedcom(family(), { includeLiving: false });
     expect(ged).not.toContain("NAME mirhayuzi");
     expect(ged).toContain("NAME norbidin");
+  });
+});
+
+describe("connections", () => {
+  // Halimah is Mohammad's sister; Mariati is Siti's mother (Mirhayuzi's maternal grandmother)
+  const withInLaws = () => {
+    const s = family();
+    const t = "2026-01-01T00:00:00.000Z";
+    s.persons.push({ id: "halimah", givenName: "Halimah", fatherName: "Norbidin", sex: "female", birthDate: "1953", living: true, createdAt: t, updatedAt: t });
+    s.persons.push({ id: "mariati", givenName: "Mariati", sex: "female", birthDate: "1930", living: false, createdAt: t, updatedAt: t });
+    s.links.push({ id: "n>h", parentId: "norbidin", childId: "halimah", kind: "birth" });
+    s.links.push({ id: "a>h", parentId: "aminah", childId: "halimah", kind: "birth" });
+    s.links.push({ id: "m>s", parentId: "mariati", childId: "siti", kind: "birth" });
+    s.unions.push({ id: "u5", partnerA: "sibil", partnerB: "mariati", status: "married", sortOrder: 0 });
+    return new FamilyGraph(s);
+  };
+
+  it("finds a path through marriages and describes each step", () => {
+    const g = withInLaws();
+    const path = connectionPath(g, "halimah", "mariati")!;
+    expect(path.ids).toHaveLength(5);
+    expect([path.ids[0], ...path.ids.slice(2)]).toEqual(["halimah", "mohammad", "siti", "mariati"]);
+    const steps = describePath(g, path);
+    expect(steps.map((s) => s.to.id)).toEqual(["mohammad", "siti", "mariati"]);
+    expect(steps.map((s) => s.kin.bm)).toEqual(["abang", "isteri", "ibu"]);
+  });
+
+  it("names the link through a go-between when there is no single word", () => {
+    const g = withInLaws();
+    expect(relationships(g, "halimah", "mariati")).toEqual([]);
+    const hm = describeVia(g, "halimah", "mariati")!;
+    expect(hm.bm).toBe("ibu mertua kepada abang Halimah");
+    expect(hm.en).toBe("mother-in-law of Halimah's brother");
+    const mh = describeVia(g, "mariati", "halimah")!;
+    expect(mh.via.id).toBe("siti");
+    expect(mh.bm).toBe("adik ipar kepada anak perempuan Mariati");
+  });
+
+  it("knows besan and which side of the family", () => {
+    const g = withInLaws();
+    expect(relationships(g, "mariati", "norbidin").map((k) => k.bm)).toContain("besan");
+    expect(relationships(g, "norbidin", "sibil").map((k) => k.bm)).toContain("besan");
+    expect(familySide(g, "mirhayuzi", "halimah")).toBe("father");
+    expect(familySide(g, "mirhayuzi", "mariati")).toBe("mother");
+    expect(familySide(g, "mirhayuzi", "mohammad")).toBeUndefined();
+    expect(connectionPath(g, "mirhayuzi", "nobody")).toBeNull();
+  });
+
+  it("counts descendants once per generation", () => {
+    const g = withInLaws();
+    const gens = g.descendantsByGeneration("norbidin");
+    expect(gens.map((x) => x.length)).toEqual([2, 3, 2]); // mohammad, halimah | mirhayuzi, aishah, bakar | fatimah, haffizuddin
+    expect(gens[0].map((p) => p.id)).toEqual(["mohammad", "halimah"]);
+  });
+});
+
+describe("matching", () => {
+  it("suggests fathers by name and skips women and descendants", () => {
+    const g = new FamilyGraph(family());
+    expect(fatherCandidates(g, "moha").map((p) => p.id)).toEqual(["mohammad"]);
+    expect(fatherCandidates(g, "siti")).toEqual([]);
+    expect(fatherCandidates(g, "haff", "mirhayuzi")).toEqual([]); // his own son
+    expect(fatherCandidates(g, "a")).toEqual([]); // too short
+  });
+
+  it("flags likely duplicates but not different people with the same name", () => {
+    const g = new FamilyGraph(family());
+    expect(possibleDuplicates(g, { givenName: "Razak", sex: "male", birthDate: "1988" }).map((p) => p.id)).toEqual(["razak"]);
+    expect(possibleDuplicates(g, { givenName: "razak", sex: "male", fatherName: "Ali" }).map((p) => p.id)).toEqual(["razak"]);
+    expect(possibleDuplicates(g, { givenName: "Razak", sex: "male", fatherName: "Hassan" })).toEqual([]);
+    expect(possibleDuplicates(g, { givenName: "Razak", sex: "male", birthDate: "1950" })).toEqual([]);
+    expect(possibleDuplicates(g, { givenName: "Razak", sex: "female" })).toEqual([]);
   });
 });

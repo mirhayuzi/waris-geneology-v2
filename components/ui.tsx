@@ -20,17 +20,32 @@ export function IconButton({ icon, onPress, label, color, size = 26 }: { icon: I
   );
 }
 
-/** Screen with a simple top bar. `back` shows a back arrow; otherwise `left` is shown. */
+/** Back to the tree from anywhere, however deep. */
+export function goHome() {
+  if (router.canDismiss()) router.dismissTo("/");
+  else router.replace("/");
+}
+
+/**
+ * Screen with a simple top bar. `back` shows a back arrow plus a Home button
+ * (pass `onHome` to confirm first, or `home={false}` to hide it); otherwise `left` is shown.
+ */
 export function Screen({
   title,
+  subtitle,
   back,
+  home = true,
+  onHome,
   left,
   right,
   children,
   bg,
 }: {
   title: string;
+  subtitle?: string;
   back?: boolean;
+  home?: boolean;
+  onHome?: () => void;
   left?: ReactNode;
   right?: ReactNode;
   children: ReactNode;
@@ -41,10 +56,20 @@ export function Screen({
     <SafeAreaView edges={["top", "left", "right"]} style={{ flex: 1, backgroundColor: c.surface }}>
       <View style={[styles.header, { borderBottomColor: c.border, backgroundColor: c.surface }]}>
         {back ? <IconButton icon="arrow-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} /> : left}
-        <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
-          {title}
-        </Text>
-        <View style={styles.headerRight}>{right}</View>
+        <View style={styles.titleBox}>
+          <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={[styles.subtitle, { color: c.muted }]} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        <View style={styles.headerRight}>
+          {back && home ? <IconButton icon="home" label="Home" onPress={onHome ?? goHome} /> : null}
+          {right}
+        </View>
       </View>
       <View style={{ flex: 1, backgroundColor: bg ?? c.background }}>{children}</View>
     </SafeAreaView>
@@ -207,7 +232,9 @@ export const sheetStyle = (c: Colors) => ({
 
 const styles = StyleSheet.create({
   header: { height: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  title: { flex: 1, fontSize: 20, fontWeight: "600", marginLeft: 8 },
+  titleBox: { flex: 1, marginLeft: 8 },
+  title: { fontSize: 20, fontWeight: "600" },
+  subtitle: { fontSize: 12, marginTop: -1 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   iconBtn: { padding: 8 },
   button: { height: 48, borderRadius: 12, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1 },

@@ -5,6 +5,7 @@ import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
 import { Button, Icon, IconButton, Muted, Screen } from "@/components/ui";
 import { type Card, layoutTree } from "@/lib/layout";
+import { fullName } from "@/lib/model";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
 
@@ -18,7 +19,9 @@ export default function TreeScreen() {
   const layout = useMemo(() => (focusId ? layoutTree(graph, focusId, treeOptions) : null), [graph, focusId, treeOptions]);
   const focus = graph.get(focusId);
   const home = graph.get(homeId);
-  const title = graph.snapshot.familyName || t("tree");
+  // The title follows whoever the tree is centred on; the saved family name stays underneath
+  const title = focus ? t("familyOf", { name: fullName(focus) }) : graph.snapshot.familyName || t("tree");
+  const subtitle = focus ? graph.snapshot.familyName || undefined : undefined;
 
   const onPressCard = (card: Card) => {
     if (card.add) {
@@ -63,7 +66,7 @@ export default function TreeScreen() {
   const hasParents = graph.parents(focus.id).length > 0;
 
   return (
-    <Screen title={title} left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />} right={header} bg={c.canvas}>
+    <Screen title={title} subtitle={subtitle} left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />} right={header} bg={c.canvas}>
       <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} />
 
       {notice ? (

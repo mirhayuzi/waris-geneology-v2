@@ -27,6 +27,8 @@ export const META = {
   treeDown: "tree_down",
   treeAdd: "tree_add",
   legacyImported: "legacy_imported",
+  /** JSON map: kind-of-link key -> the user's own term (e.g. "makcik ipar") */
+  customTerms: "custom_terms",
 } as const;
 
 export class MemoryRepo implements Repo {

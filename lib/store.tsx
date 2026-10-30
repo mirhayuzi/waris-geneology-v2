@@ -37,6 +37,11 @@ interface Store {
   addRelative: (req: RelativeRequest) => Promise<string>;
   createPerson: (p: Person) => Promise<void>;
   removeParentLink: (linkId: string) => Promise<void>;
+  /** Links an existing person to a father and/or mother already in the tree */
+  linkParents: (childId: string, fatherId?: string, motherId?: string) => Promise<void>;
+  /** The user's own words for kinds of links, keyed by describeVia().key */
+  customTerms: Record<string, string>;
+  setCustomTerm: (key: string, term: string) => Promise<void>;
   saveUnion: (u: Union) => Promise<void>;
   removeUnion: (id: string) => Promise<void>;
   setHome: (id: string) => Promise<void>;
@@ -97,6 +102,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [treeOptions, setTreeOptionsState] = useState<LayoutOptions>(DEFAULT_OPTIONS);
   const [focusId, setFocusId] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [customTerms, setCustomTerms] = useState<Record<string, string>>({});
 
   const t = useCallback((key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang]);
   const graph = useMemo(() => new FamilyGraph(snapshot), [snapshot]);
@@ -122,6 +128,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           down: down ? Number(down) : DEFAULT_OPTIONS.down,
           showAdd: (await repo.getMeta(META.treeAdd)) !== "0",
         });
+        try {
+          setCustomTerms(JSON.parse((await repo.getMeta(META.customTerms)) ?? "{}"));
+        } catch {
+          // ignore a damaged value; terms can be set again
+        }
         const s = await repo.load();
         setSnapshot(s);
         setFocusId(s.homePersonId ?? s.persons[0]?.id);
@@ -198,6 +209,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     removeParentLink: async (linkId) => {
       await repo().deleteLink(linkId);
       await reload();
+    },
+    linkParents: async (childId, fatherId, motherId) => {
+      // Re-read so a person saved a moment ago is included
+      for (const [role, id] of [["father", fatherId], ["mother", motherId]] as const) {
+        if (!id) continue;
+        const g = new FamilyGraph(await repo().load());
+        if (g.parentLinksOf(childId).some((l) => l.parentId === id)) continue;
+        await addRelativeAction(repo(), g, { role, of: childId, person: { id } });
+      }
+      await reload();
+    },
+    customTerms,
+    setCustomTerm: async (key, term) => {
+      const next = { ...customTerms };
+      if (term.trim()) next[key] = term.trim();
+      else delete next[key];
+      setCustomTerms(next);
+      await repo().setMeta(META.customTerms, JSON.stringify(next));
     },
     saveUnion: async (u) => {
       await repo().saveUnion(u);

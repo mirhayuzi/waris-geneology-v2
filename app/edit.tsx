@@ -1,12 +1,14 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
+import { FatherField } from "@/components/FatherField";
 import { PersonPicker } from "@/components/PersonPicker";
-import { Button, Choice, Field, Icon, IconButton, Muted, Screen } from "@/components/ui";
-import { makePerson, type Role, RuleError, suggestFatherName } from "@/lib/actions";
-import { parseInput, toInput } from "@/lib/dates";
+import { Button, Choice, Field, goHome, Icon, IconButton, Muted, Screen } from "@/components/ui";
+import { checkParent, makePerson, type Role, RuleError, suggestFatherName } from "@/lib/actions";
+import { parseInput, toInput, yearOf } from "@/lib/dates";
 import { deletePhoto, pickImage, photoUri } from "@/lib/files";
+import { possibleDuplicates } from "@/lib/match";
 import { ETHNICITIES, fullName, type LinkKind, type Person, PREFIXES, RELIGIONS, type Sex, type UnionStatus } from "@/lib/model";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
@@ -80,12 +82,43 @@ export default function EditScreen() {
     phone: editing?.phone ?? "",
     notes: editing?.notes ?? "",
   }));
+  // Father picked from the tree in the bin/binti field, and which of his wives is the mother
+  const treeFather = editing ? graph.father(editing.id) : undefined;
+  const treeMother = editing ? graph.mother(editing.id) : undefined;
+  const canLinkFather = !treeFather && role !== "child" && role !== "sibling";
+  const [fatherLink, setFatherLink] = useState<Person>();
+  const fatherWives = useMemo(() => (fatherLink ? graph.partners(fatherLink.id) : []), [graph, fatherLink]);
+  const [motherId, setMotherId] = useState<string>();
+  const linkFather = (p: Person) => {
+    setFatherLink(p);
+    const wives = graph.partners(p.id);
+    setMotherId(wives.length === 1 ? wives[0].id : undefined);
+  };
+  const initial = useRef(JSON.stringify(f));
+
   const [photo, setPhoto] = useState<{ uri: string; mime?: string | null } | null | undefined>(undefined); // undefined = unchanged
   const [more, setMore] = useState(!!editing && !!(editing.prefix || editing.religion || editing.ethnicity || editing.occupation || editing.notes || editing.nickname || editing.surname));
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((prev) => ({ ...prev, [k]: v }));
+
+  const ask = (heading: string, body: string, okLabel: string) =>
+    new Promise<boolean>((resolve) =>
+      Alert.alert(
+        heading,
+        body,
+        [
+          { text: t("cancel"), style: "cancel", onPress: () => resolve(false) },
+          { text: okLabel, onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      ),
+    );
+  const dirty = JSON.stringify(f) !== initial.current || photo !== undefined || !!fatherLink || !!picked;
+  const onHome = async () => {
+    if (!dirty || (await ask(t("leaveQ"), "", t("leave")))) goHome();
+  };
 
   const title = editing ? t("edit") : role ? t(ROLE_TITLE[role]) : t("addPerson");
   const parentRole = role === "father" || role === "mother" || role === "child" || role === "sibling";
@@ -122,6 +155,25 @@ export default function EditScreen() {
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
+    // The father picked from the tree must be possible (no loops, no second birth father)
+    const motherToLink = fatherLink && motherId && !treeMother ? motherId : undefined;
+    if (fatherLink && editing) {
+      try {
+        checkParent(graph, fatherLink, editing.id, "birth");
+        if (motherToLink) checkParent(graph, graph.get(motherToLink)!, editing.id, "birth");
+      } catch (e) {
+        return Alert.alert(title, e instanceof RuleError ? t(e.key, e.vars) : String(e));
+      }
+    }
+    // Someone with this name may already be in the tree
+    if (!editing && !(role && mode === "existing")) {
+      const dups = possibleDuplicates(graph, { givenName: f.givenName.trim(), sex: f.sex, fatherName: f.fatherName.trim() || undefined, birthDate: birth || undefined }, fatherLink?.id);
+      if (dups.length) {
+        const list = dups.map((d) => `• ${fullName(d)}${yearOf(d.birthDate) ? ` (${yearOf(d.birthDate)})` : ""}`).join("\n");
+        if (!(await ask(t("dupTitle"), t("dupBody", { list }), t("saveAnyway")))) return;
+      }
+    }
+
     const fields = {
       givenName: f.givenName.trim(),
       sex: f.sex,
@@ -149,6 +201,7 @@ export default function EditScreen() {
         let p: Person = { ...editing, ...fields };
         if (photo !== undefined) p = await store.setPhoto(p, photo);
         await store.savePerson(p);
+        if (fatherLink) await store.linkParents(p.id, fatherLink.id, motherToLink);
         router.back();
         return;
       }
@@ -157,6 +210,7 @@ export default function EditScreen() {
         if (photo) p = await store.setPhoto(p, photo);
         newPhoto = p.photo;
         await store.createPerson(p);
+        if (fatherLink) await store.linkParents(p.id, fatherLink.id, motherToLink);
         router.back();
         return;
       }
@@ -168,7 +222,7 @@ export default function EditScreen() {
         newPhoto = p.photo;
         personArg = { create: p };
       }
-      await store.addRelative({
+      const relId = await store.addRelative({
         role,
         of: base!.id,
         person: personArg,
@@ -176,6 +230,7 @@ export default function EditScreen() {
         otherParentId: role === "child" ? (otherParent ?? null) : undefined,
         union: role === "spouse" ? { status: unionStatus, startDate: married || undefined } : undefined,
       });
+      if (fatherLink && "create" in personArg) await store.linkParents(relId, fatherLink.id, motherToLink);
       router.back();
     } catch (e) {
       if (newPhoto) await deletePhoto(newPhoto);
@@ -192,7 +247,7 @@ export default function EditScreen() {
   ];
 
   return (
-    <Screen title={title} back right={<IconButton icon="check" label={t("save")} onPress={onSave} color={c.primary} />}>
+    <Screen title={title} back onHome={onHome} right={<IconButton icon="check" label={t("save")} onPress={onSave} color={c.primary} />}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {base ? (
@@ -260,7 +315,28 @@ export default function EditScreen() {
 
               <Field label={`${t("givenName")} *`} value={f.givenName} onChangeText={(v) => set("givenName", v)} placeholder={t("givenNameHint")} error={errors.givenName} autoCapitalize="words" />
               <Choice label={t("sex")} value={f.sex} onChange={(v) => v && set("sex", v)} options={sexOptions} />
-              <Field label={t("fatherName")} value={f.fatherName} onChangeText={(v) => set("fatherName", v)} placeholder={t("fatherNameHint")} autoCapitalize="words" />
+              <FatherField
+                sex={f.sex}
+                value={f.fatherName}
+                onChangeText={(v) => set("fatherName", v)}
+                linked={fatherLink}
+                onLink={linkFather}
+                onUnlink={() => {
+                  setFatherLink(undefined);
+                  setMotherId(undefined);
+                }}
+                canLink={canLinkFather}
+                childId={editing?.id}
+                treeFather={treeFather}
+              />
+              {fatherLink && fatherWives.length && !treeMother ? (
+                <Choice
+                  label={t("motherOf", { name: fatherLink.givenName })}
+                  value={motherId ?? "none"}
+                  onChange={(v) => setMotherId(v === "none" || !v ? undefined : v)}
+                  options={[...fatherWives.map((w) => ({ value: w.id, label: w.givenName })), { value: "none", label: t("unknown") }]}
+                />
+              ) : null}
 
               <View style={styles.switchRow}>
                 <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{t("living")}</Text>

@@ -152,6 +152,31 @@ export class FamilyGraph {
     return depth;
   }
 
+  /**
+   * Descendants grouped by generation: [children, grandchildren, great-grandchildren, ...].
+   * Each person is counted once, at their closest generation (cousin marriages can reach
+   * someone twice). By default only birth children are followed.
+   */
+  descendantsByGeneration(personId: string, opts: { includeNonBirth?: boolean } = {}): Person[][] {
+    const seen = new Set([personId]);
+    const out: Person[][] = [];
+    let frontier = [personId];
+    while (frontier.length) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const l of this.childLinksOf(id)) {
+          if (!opts.includeNonBirth && l.kind !== "birth") continue;
+          if (seen.has(l.childId)) continue;
+          seen.add(l.childId);
+          next.push(l.childId);
+        }
+      }
+      if (next.length) out.push(byBirth(next.map((id) => this.persons.get(id)!)));
+      frontier = next;
+    }
+    return out;
+  }
+
   /** Number of people connected to `personId` through any relationship. */
   connectedCount(personId: string): number {
     const seen = new Set([personId]);

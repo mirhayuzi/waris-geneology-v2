@@ -165,6 +165,13 @@ export function relationships(graph: FamilyGraph, aId: string, bId: string): Kin
       if (!hit || (hit.up === 0 && hit.down === 0)) continue;
       add(relativeOfSpouse(hit, s, b));
     }
+    // Besan: parents of a married couple
+    for (const ca of graph.children(aId)) {
+      if (graph.partners(ca.id).some((sp) => graph.parents(sp.id).some((q) => q.id === bId))) {
+        add({ en: "co-parent-in-law", bm: "besan" });
+        break;
+      }
+    }
     // Biras: spouses of two siblings
     for (const s of graph.partners(aId)) {
       for (const sib of graph.siblings(s.id)) {
@@ -209,4 +216,160 @@ function relativeOfSpouse(hit: BloodHit, s: Person, b: Person): Kin {
   }
   const k = bloodKin(up, down, b, s);
   return { en: `${sp}'s ${k.en}`, bm: `${k.bm} kepada ${spBm}` };
+}
+
+// ---------------------------------------------------------------------------
+// Connection path: how two people are linked through any chain of parents,
+// children and marriages, even when there is no single word for it.
+
+export type Edge = "parent" | "child" | "spouse";
+
+/** Shortest chain of people from A to B (A first, B last), or null when not connected. */
+export function connectionPath(graph: FamilyGraph, aId: string, bId: string): { ids: string[]; edges: Edge[] } | null {
+  if (!graph.get(aId) || !graph.get(bId)) return null;
+  if (aId === bId) return { ids: [aId], edges: [] };
+  const prev = new Map<string, { from: string; edge: Edge }>();
+  const seen = new Set([aId]);
+  let frontier = [aId];
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      // Blood links first, so ties prefer fewer marriages
+      const steps: [string, Edge][] = [
+        ...graph.parentLinksOf(id).map((l) => [l.parentId, "parent"] as [string, Edge]),
+        ...graph.childLinksOf(id).map((l) => [l.childId, "child"] as [string, Edge]),
+        ...graph.partners(id).map((p) => [p.id, "spouse"] as [string, Edge]),
+      ];
+      for (const [n, edge] of steps) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        prev.set(n, { from: id, edge });
+        if (n === bId) {
+          const ids = [bId];
+          const edges: Edge[] = [];
+          let cur = bId;
+          while (cur !== aId) {
+            const p = prev.get(cur)!;
+            edges.unshift(p.edge);
+            ids.unshift(p.from);
+            cur = p.from;
+          }
+          return { ids, edges };
+        }
+        next.push(n);
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
+/** One hop in a described path: `to` is `from`'s `kin`. */
+export interface PathStep {
+  from: Person;
+  to: Person;
+  kin: Kin;
+}
+
+/**
+ * The path as readable steps. Runs of parent/child links are merged into one blood
+ * term (abang, sepupu, datuk ...); marriages become suami/isteri.
+ */
+export function describePath(graph: FamilyGraph, path: { ids: string[]; edges: Edge[] }): PathStep[] {
+  const out: PathStep[] = [];
+  let i = 0;
+  while (i < path.edges.length) {
+    const start = i;
+    if (path.edges[i] === "spouse") {
+      i++;
+    } else {
+      // up* then down* is one blood relationship
+      while (i < path.edges.length && path.edges[i] === "parent") i++;
+      while (i < path.edges.length && path.edges[i] === "child") i++;
+    }
+    const from = graph.get(path.ids[start])!;
+    const to = graph.get(path.ids[i])!;
+    const rel = relationships(graph, from.id, to.id);
+    let kin = rel[0];
+    if (!kin) {
+      const up = path.edges.slice(start, i).filter((e) => e === "parent").length;
+      const down = i - start - up;
+      kin = bloodKin(up, down, to, from);
+    }
+    out.push({ from, to, kin });
+  }
+  return out;
+}
+
+/** "B is the ___ of A's ___": used when there is no single word for B. */
+export interface ViaKin {
+  via: Person;
+  /** How `via` is related to A */
+  aToVia: Kin;
+  /** How B is related to `via` */
+  viaToB: Kin;
+  en: string;
+  bm: string;
+  /** Stable key for this kind of link, used for the user's own terms */
+  key: string;
+}
+
+export function describeVia(graph: FamilyGraph, aId: string, bId: string): ViaKin | null {
+  const a = graph.get(aId);
+  const path = connectionPath(graph, aId, bId);
+  if (!a || !path || path.ids.length < 3) return null;
+  let best: ViaKin | null = null;
+  let bestBlood = false;
+  // Walk from A towards B; prefer a go-between who is A's blood relative, as far along as possible
+  for (const viaId of path.ids.slice(1, -1)) {
+    const aToVia = relationships(graph, aId, viaId)[0];
+    const viaToB = relationships(graph, viaId, bId)[0];
+    if (!aToVia || !viaToB) continue;
+    const blood = !!findBlood(graph, aId, viaId);
+    if (best && bestBlood && !blood) continue;
+    const via = graph.get(viaId)!;
+    best = {
+      via,
+      aToVia,
+      viaToB,
+      en: `${viaToB.en} of ${a.givenName}'s ${aToVia.en}`,
+      bm: `${viaToB.bm} kepada ${aToVia.bm} ${a.givenName}`,
+      key: `${aToVia.en}|${viaToB.en}`,
+    };
+    bestBlood = blood;
+  }
+  return best;
+}
+
+/** For blood relatives beyond parents: which side of A's family B comes from. */
+export function familySide(graph: FamilyGraph, aId: string, bId: string): "father" | "mother" | undefined {
+  const hit = findBlood(graph, aId, bId);
+  if (!hit || hit.up < 2) return undefined;
+  const f = graph.father(aId);
+  const m = graph.mother(aId);
+  const viaF = f && (f.id === bId || findBlood(graph, f.id, bId));
+  const viaM = m && (m.id === bId || findBlood(graph, m.id, bId));
+  if (viaF && !viaM) return "father";
+  if (viaM && !viaF) return "mother";
+  return undefined;
+}
+
+/** Everything needed to say how B is related to A, closest wording first. */
+export interface RelationText {
+  /** Direct terms (may be several, e.g. sepupu · isteri) */
+  direct: Kin[];
+  side?: "father" | "mother";
+  /** When there is no direct term: B described through someone in between */
+  via?: ViaKin;
+  /** The user's own word for this kind of link, if they set one */
+  custom?: string;
+}
+
+export function relationText(graph: FamilyGraph, aId: string, bId: string, customTerms: Record<string, string> = {}): RelationText | null {
+  if (aId === bId) return null;
+  const direct = relationships(graph, aId, bId);
+  if (direct.length) return { direct, side: familySide(graph, aId, bId) };
+  const via = describeVia(graph, aId, bId);
+  if (via) return { direct: [], via, custom: customTerms[via.key] };
+  return null;
 }

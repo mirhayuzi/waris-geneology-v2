@@ -121,10 +121,21 @@ const toPerson = (r: PersonRow): Person => ({
   updatedAt: r.updated_at,
 });
 
-const PERSON_SQL = `INSERT OR REPLACE INTO person
-  (id, given_name, prefix, father_name, surname, nickname, sex, living, birth_date, birth_place,
-   death_date, death_place, burial_place, religion, ethnicity, occupation, phone, photo, notes, created_at, updated_at)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+/**
+ * Insert, or update in place. Never use INSERT OR REPLACE here: SQLite does that by deleting
+ * the old row, and ON DELETE CASCADE then wipes the person's marriages and parent links.
+ */
+function upsertSql(table: string, cols: string[]): string {
+  const sets = cols.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ");
+  return `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(",")})
+  ON CONFLICT(id) DO UPDATE SET ${sets}`;
+}
+
+const PERSON_SQL = upsertSql("person", [
+  "id", "given_name", "prefix", "father_name", "surname", "nickname", "sex", "living", "birth_date", "birth_place",
+  "death_date", "death_place", "burial_place", "religion", "ethnicity", "occupation", "phone", "photo", "notes",
+  "created_at", "updated_at",
+]);
 const personParams = (p: Person) => [
   p.id, p.givenName, p.prefix ?? null, p.fatherName ?? null, p.surname ?? null, p.nickname ?? null, p.sex,
   p.living ? 1 : 0, p.birthDate ?? null, p.birthPlace ?? null, p.deathDate ?? null, p.deathPlace ?? null,
@@ -132,8 +143,9 @@ const personParams = (p: Person) => [
   p.photo ?? null, p.notes ?? null, p.createdAt, p.updatedAt,
 ];
 
-const UNION_SQL = `INSERT OR REPLACE INTO family_union
-  (id, partner_a, partner_b, status, start_date, end_date, place, notes, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`;
+const UNION_SQL = upsertSql("family_union", [
+  "id", "partner_a", "partner_b", "status", "start_date", "end_date", "place", "notes", "sort_order",
+]);
 const unionParams = (u: Union) => [
   u.id, u.partnerA, u.partnerB, u.status, u.startDate ?? null, u.endDate ?? null, u.place ?? null, u.notes ?? null, u.sortOrder,
 ];
