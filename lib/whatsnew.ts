@@ -5,8 +5,14 @@ export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
     version: "2.3.2",
     notes: {
-      en: ["Big families open at a readable size around the centre person; pinch out to see everyone"],
-      bm: ["Keluarga besar dibuka pada saiz yang boleh dibaca di sekitar orang di tengah; cubit keluar untuk lihat semua"],
+      en: [
+        "Big families open at a readable size around the centre person; pinch out to see everyone",
+        "Choose a tree background: Plain, Batik, Paper, Songket, Dusk or Night (Tree view settings)",
+      ],
+      bm: [
+        "Keluarga besar dibuka pada saiz yang boleh dibaca di sekitar orang di tengah; cubit keluar untuk lihat semua",
+        "Pilih latar belakang salasilah: Biasa, Batik, Kertas, Songket, Senja atau Malam (tetapan Paparan salasilah)",
+      ],
     },
   },
   {

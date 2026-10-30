@@ -73,6 +73,8 @@ export interface LayoutOptions {
   collapsed?: string[];
   /** Draw the original (plain views) tree instead of the game-style one */
   classic?: boolean;
+  /** Tree screen background template (lib/backgrounds.ts) */
+  background?: string;
 }
 
 export const DEFAULT_OPTIONS: LayoutOptions = { up: 3, down: 2, showAdd: true };

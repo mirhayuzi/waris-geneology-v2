@@ -191,11 +191,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           down: num(await repo.getMeta(META.treeDown), DEFAULT_OPTIONS.down, 4),
           showAdd: (await repo.getMeta(META.treeAdd)) !== "0",
           classic: (await repo.getMeta(META.treeStyle)) === "classic",
+          background: await repo.getMeta(META.treeBackground),
         };
         // The last launch stopped while drawing the tree (crash): start with the default view
         if ((await repo.getMeta(META.treeDrawing)) === "1") {
           // ...in the classic drawing, which has been safe on every phone so far
-          opts = { ...DEFAULT_OPTIONS, classic: true };
+          opts = { ...DEFAULT_OPTIONS, classic: true, background: opts.background };
           await repo.setMeta(META.treeStyle, "classic");
           await repo.setMeta(META.treeUp, String(opts.up));
           await repo.setMeta(META.treeDown, String(opts.down));
@@ -256,6 +257,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           repo().setMeta(META.treeDown, String(o.down));
           repo().setMeta(META.treeAdd, o.showAdd ? "1" : "0");
           repo().setMeta(META.treeStyle, o.classic ? "classic" : "game");
+          repo().setMeta(META.treeBackground, o.background);
         });
     },
     treeDrawn: () => {

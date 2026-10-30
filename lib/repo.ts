@@ -28,6 +28,8 @@ export const META = {
   treeAdd: "tree_add",
   /** "classic" = the original tree drawing; otherwise the game-style tree */
   treeStyle: "tree_style",
+  /** Tree screen background template id */
+  treeBackground: "tree_background",
   legacyImported: "legacy_imported",
   /** Edits since the last backup, when that was, and until when "Later" hides the reminder */
   changesSinceBackup: "changes_since_backup",

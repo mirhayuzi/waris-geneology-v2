@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SkiaTree } from "@/components/SkiaTree";
+import { BACKGROUND_IDS, backgroundOf, isBackgroundId, useTreeBackground } from "@/lib/backgrounds";
 import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
 import { LifeBadge } from "@/components/TreeCard";
@@ -33,6 +34,9 @@ export default function TreeScreen() {
     }
   };
   const canvas = useRef<TreeCanvasHandle>(null);
+  const bgId = isBackgroundId(treeOptions.background) ? treeOptions.background : "plain";
+  const background = useTreeBackground(bgId);
+  const dark = c.canvas !== backgroundOf("plain", false).bg;
   const [addOpen, setAddOpen] = useState(false);
   const [optsOpen, setOptsOpen] = useState(false);
 
@@ -114,7 +118,7 @@ export default function TreeScreen() {
       subtitle={subtitle}
       left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />}
       right={header}
-      bg={c.canvas}
+      bg={background.bg}
     >
       <View style={{ flex: 1, flexDirection: "row" }}>
         <View style={{ flex: 1 }}>
@@ -135,7 +139,7 @@ export default function TreeScreen() {
             )}
           >
             {treeOptions.classic ? (
-              <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} />
+              <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} background={background} />
             ) : (
               <SkiaTree
                 ref={canvas}
@@ -144,6 +148,7 @@ export default function TreeScreen() {
                 onLongPressCard={onLongPressCard}
                 onPressFocusAdd={() => setAddOpen(true)}
                 onPressBranch={onPressBranch}
+                background={background}
               />
             )}
           </ErrorBoundary>
@@ -223,6 +228,35 @@ export default function TreeScreen() {
         <View style={styles.optRow}>
           <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{t("classicTree")}</Text>
           <Switch value={!!treeOptions.classic} onValueChange={(classic) => setTreeOptions({ ...treeOptions, classic })} trackColor={{ true: c.primary }} />
+        </View>
+        <Text style={{ color: c.text, fontSize: 16, marginTop: 8 }}>{t("background")}</Text>
+        <View style={styles.swatches}>
+          {BACKGROUND_IDS.map((id) => {
+            const b = backgroundOf(id, dark);
+            const on = id === bgId;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => setTreeOptions({ ...treeOptions, background: id })}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={t(`bg_${id}`)}
+                style={styles.swatchBox}
+              >
+                <View style={[styles.swatch, { backgroundColor: b.bg, borderColor: on ? c.focusRing : c.border, borderWidth: on ? 3 : 1 }]}>
+                  {b.bg2 ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: "50%", backgroundColor: b.bg2 }} /> : null}
+                  <View style={{ width: 18, height: 2, backgroundColor: b.line }} />
+                  <View style={{ flexDirection: "row", gap: 3, marginTop: 3 }}>
+                    <View style={[styles.mini, { backgroundColor: c.surface }]} />
+                    <View style={[styles.mini, { backgroundColor: c.surface }]} />
+                  </View>
+                </View>
+                <Text style={{ color: on ? c.text : c.muted, fontSize: 12, fontWeight: on ? "700" : "400" }} numberOfLines={1}>
+                  {t(`bg_${id}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
         <View style={[styles.optRow, { gap: 10 }]}>
           <Button title="−" kind="secondary" onPress={() => canvas.current?.zoomBy(1 / 1.4)} style={{ flex: 1 }} />
@@ -319,5 +353,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  swatches: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingVertical: 8 },
+  swatchBox: { alignItems: "center", gap: 4, width: 56 },
+  swatch: { width: 52, height: 52, borderRadius: 12, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  mini: { width: 12, height: 14, borderRadius: 2 },
   optRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
 });

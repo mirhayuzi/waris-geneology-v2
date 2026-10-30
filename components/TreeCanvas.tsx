@@ -23,14 +23,17 @@ interface Props {
   onPressCard: (card: Card) => void;
   onLongPressCard: (card: Card) => void;
   onPressFocusAdd: () => void;
+  /** Background colour and line colour of the chosen template (patterns are drawn by the game-style tree only) */
+  background?: { bg: string; line: string };
 }
 
 /**
  * Pan (one finger) and pinch-zoom (two fingers) canvas. Double-tap zooms in,
  * double-tap again when zoomed in fits the tree back on screen.
  */
-export const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas({ layout, onPressCard, onLongPressCard, onPressFocusAdd }, ref) {
-  const c = useColors();
+export const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanvas({ layout, onPressCard, onLongPressCard, onPressFocusAdd, background }, ref) {
+  const base = useColors();
+  const c = useMemo(() => (background ? { ...base, canvas: background.bg, line: background.line } : base), [base, background]);
   const [view, setView] = useState({ w: 0, h: 0 });
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);

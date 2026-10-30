@@ -4,13 +4,16 @@ import {
   ClipOp,
   FontWeight,
   Group,
+  LinearGradient,
   PaintStyle,
   Picture,
+  Rect,
   type SkCanvas,
   type SkParagraph,
   Skia,
   StrokeCap,
   TextAlign,
+  vec,
 } from "@shopify/react-native-skia";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, StyleSheet, View } from "react-native";
@@ -27,6 +30,7 @@ import {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import type { TreeBackground } from "@/lib/backgrounds";
 import type { Card, TreeLayout } from "@/lib/layout";
 import { cardName, type Person } from "@/lib/model";
 import { onTreePhotos, treePhoto } from "@/lib/skia-photos";
@@ -53,6 +57,7 @@ interface Props {
   onPressFocusAdd: () => void;
   /** The "−" / "+N" button under a couple */
   onPressBranch: (card: Card) => void;
+  background: TreeBackground;
 }
 
 interface Win {
@@ -68,8 +73,10 @@ interface Win {
  * moved and zoomed on the UI thread, so panning stays smooth on big families.
  * Only the part on (or near) the screen is drawn.
  */
-export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ layout, onPressCard, onLongPressCard, onPressFocusAdd, onPressBranch }, ref) {
-  const c = useColors();
+export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ layout, onPressCard, onLongPressCard, onPressFocusAdd, onPressBranch, background }, ref) {
+  const base = useColors();
+  // the chosen background brings its own line colour, picked to stand out on it
+  const c = useMemo(() => ({ ...base, canvas: background.bg, line: background.line }), [base, background]);
   const { t } = useStore();
   const [view, setView] = useState({ w: 0, h: 0 });
   const scale = useSharedValue(1);
@@ -211,6 +218,9 @@ export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, win, c, labels, t, photoTick]);
 
+  // The background pattern stays still while the tree moves over it (drawn once per screen size)
+  const pattern = useMemo(() => (background.pattern && view.w ? drawPattern(background, view.w, view.h) : null), [background, view.w, view.h]);
+
   const transform = useDerivedValue(() => [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }]);
   const focusCard = layout.cards.find((k) => k.focus);
   const ring = focusCard ? { x: focusCard.x + focusCard.w / 2, y: focusCard.y + 4 + 10 + 36 } : null;
@@ -350,6 +360,12 @@ export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ 
       <View style={[styles.fill, { backgroundColor: c.canvas }]} onLayout={onLayout} collapsable={false}>
         {view.w ? (
           <Canvas style={StyleSheet.absoluteFill}>
+            {background.bg2 ? (
+              <Rect x={0} y={0} width={view.w} height={view.h}>
+                <LinearGradient start={vec(0, 0)} end={vec(0, view.h)} colors={[background.bg, background.bg2]} />
+              </Rect>
+            ) : null}
+            {pattern ? <Picture picture={pattern} /> : null}
             <Group transform={transform}>
               {ring ? (
                 <>
@@ -369,6 +385,61 @@ export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ 
     </GestureDetector>
   );
 });
+
+/** Faint background pattern in screen space. */
+function drawPattern(bg: TreeBackground, w: number, h: number) {
+  const rec = Skia.PictureRecorder();
+  const cv = rec.beginRecording(Skia.XYWHRect(0, 0, w, h));
+  const color = bg.patternColor ?? bg.line;
+  if (bg.pattern === "batik") {
+    // clusters of rings and dots, like a batik cap print
+    const ring = paint(color, { stroke: 1.4 });
+    const dot = paint(color);
+    const step = 150;
+    for (let y = -step / 2, row = 0; y < h + step; y += step * 0.75, row++) {
+      for (let x = row % 2 ? step / 2 : 0; x < w + step; x += step) {
+        for (const r of [10, 20, 30]) cv.drawCircle(x, y, r, ring);
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4;
+          cv.drawCircle(x + Math.cos(a) * 40, y + Math.sin(a) * 40, 2.4, dot);
+        }
+      }
+    }
+  } else if (bg.pattern === "dots") {
+    // paper: a quiet dot grid
+    const dot = paint(color);
+    for (let y = 12; y < h; y += 22) for (let x = 12; x < w; x += 22) cv.drawCircle(x, y, 1.3, dot);
+  } else if (bg.pattern === "songket") {
+    // songket: a diamond lattice with small diamonds where the threads cross
+    const thread = paint(color, { stroke: 1.2 });
+    const step = 56;
+    for (let d = -h; d < w + h; d += step) {
+      cv.drawLine(d, 0, d + h, h, thread);
+      cv.drawLine(d, h, d + h, 0, thread);
+    }
+    const fill = paint(color);
+    for (let y = 0; y < h + step; y += step / 2) {
+      for (let x = (Math.round(y / (step / 2)) % 2) * (step / 2); x < w + step; x += step) {
+        const p = Skia.Path.Make();
+        p.moveTo(x, y - 5);
+        p.lineTo(x + 5, y);
+        p.lineTo(x, y + 5);
+        p.lineTo(x - 5, y);
+        p.close();
+        cv.drawPath(p, fill);
+      }
+    }
+  } else if (bg.pattern === "stars") {
+    // night sky: soft stars, a few in kunyit gold (same sky every time)
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const star = paint(color);
+    const gold = paint("#F2B92B", { alpha: 0.35 });
+    const n = Math.round((w * h) / 2600);
+    for (let i = 0; i < n; i++) cv.drawCircle(rnd() * w, rnd() * h, 0.8 + rnd() * 1.6, i % 11 === 0 ? gold : star);
+  }
+  return rec.finishRecordingAsPicture();
+}
 
 // ---------------------------------------------------------------------------
 // Drawing (recorded once into a picture, replayed every frame by the GPU)
