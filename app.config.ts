@@ -27,7 +27,7 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#FAFAF8",
+      backgroundColor: "#2E3F8F",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -83,8 +83,8 @@ const config: ExpoConfig = {
         image: "./assets/images/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
-        backgroundColor: "#ffffff",
-        dark: { backgroundColor: "#000000" },
+        backgroundColor: "#2E3F8F",
+        dark: { backgroundColor: "#1D2752" },
       },
     ],
     [
@@ -99,6 +99,8 @@ const config: ExpoConfig = {
       },
     ],
   ],
+  // Shown on the About page; set when the APK is built
+  extra: { buildDate: new Date().toISOString().slice(0, 10) },
   experiments: {
     typedRoutes: false,
   },

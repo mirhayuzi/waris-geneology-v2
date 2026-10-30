@@ -8,6 +8,7 @@ import { Button, Choice, Field, Icon, Muted, Row, Screen, Section } from "@/comp
 import { pickRestoreFiles, saveTextFile, shareFile, XLSX_MIME } from "@/lib/files";
 import { fullName } from "@/lib/model";
 import { IS_PREVIEW } from "@/lib/open-repo";
+import { appVersion } from "@/lib/version";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
 
@@ -143,6 +144,16 @@ export default function SettingsScreen() {
           <Row title={t("restoreBackup")} subtitle={t("restoreDesc")} left={<Icon name="restore" color={c.primary} />} onPress={restore} />
           <Row title={t("exportExcel")} subtitle={t("exportExcelDesc")} left={<Icon name="grid-on" color={c.primary} />} onPress={() => setExcelOpen(true)} />
           <Row title={t("exportGedcom")} subtitle={t("gedcomDesc")} left={<Icon name="ios-share" color={c.primary} />} onPress={exportGedcom} last />
+        </Section>
+
+        <Section>
+          <Row
+            title={t("aboutWaris")}
+            subtitle={`${t("versionLine", { v: appVersion().version })} · ${t("whatsNew")}`}
+            left={<Icon name="info-outline" color={c.primary} />}
+            onPress={() => router.push("/about")}
+            last
+          />
         </Section>
 
         {busy ? <ActivityIndicator style={{ marginTop: 16 }} color={c.primary} /> : null}

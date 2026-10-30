@@ -32,6 +32,7 @@ function Gate() {
       <Stack.Screen name="duplicates" />
       <Stack.Screen name="print" />
       <Stack.Screen name="open" />
+      <Stack.Screen name="about" />
     </Stack>
   );
 }
