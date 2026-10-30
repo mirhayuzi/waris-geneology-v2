@@ -32,7 +32,7 @@ export const TreeCard = memo(function TreeCard({ card, onPress, onLongPress, onP
   const p = card.person;
   const sex = p?.sex ?? card.add?.sex ?? "male";
   const stripe = sex === "female" ? c.female : c.male;
-  const avatar = card.focus ? 78 : 58;
+  const avatar = card.focus ? 72 : 52;
 
   return (
     <Pressable
@@ -48,26 +48,30 @@ export const TreeCard = memo(function TreeCard({ card, onPress, onLongPress, onP
     >
       {p ? (
         <>
-          <View style={{ marginTop: card.focus ? 12 : 10 }}>
-            <Avatar person={p} size={avatar} />
+          <View style={{ marginTop: card.focus ? 10 : 8 }}>
+            <View style={!p.living && { opacity: 0.55 }}>
+              <Avatar person={p} size={avatar} />
+            </View>
+            <LifeBadge living={p.living} size={card.focus ? 20 : 17} />
           </View>
           {(() => {
             const [l1, l2] = cardName(p);
+            // Long names shrink to fit instead of spilling out of the box
             return (
-              <>
-                <Text style={[styles.name, card.focus && styles.nameFocus, { color: c.text }]} numberOfLines={2}>
+              <View style={styles.names}>
+                <Text style={[styles.name, card.focus && styles.nameFocus, { color: c.text }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>
                   {p.prefix && card.focus ? `${p.prefix} ` : ""}
                   {l1}
                 </Text>
                 {l2 ? (
-                  <Text style={[styles.sub, { color: c.text }]} numberOfLines={1}>
+                  <Text style={[styles.sub, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {l2}
                   </Text>
                 ) : null}
-              </>
+              </View>
             );
           })()}
-          <Text style={[styles.dates, { color: c.muted }]} numberOfLines={1}>
+          <Text style={[styles.dates, { color: p.living ? c.muted : c.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {lifespan(p, t)}
           </Text>
           {card.focus ? (
@@ -90,6 +94,25 @@ export const TreeCard = memo(function TreeCard({ card, onPress, onLongPress, onP
   );
 });
 
+export const LIVING_COLOR = "#2E9E5B";
+export const DECEASED_COLOR = "#6B6B6B";
+
+/** Small badge on the photo: green dot = living, grey flower = deceased. */
+export function LifeBadge({ living, size, inline }: { living: boolean; size: number; inline?: boolean }) {
+  const c = useColors();
+  return (
+    <View
+      style={[
+        styles.badge,
+        inline && { position: "relative", right: 0, bottom: 0, borderWidth: 0 },
+        { width: size, height: size, borderRadius: size / 2, borderColor: c.surface, backgroundColor: living ? LIVING_COLOR : DECEASED_COLOR },
+      ]}
+    >
+      {living ? null : <Icon name="local-florist" size={size - 7} color="#fff" />}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
@@ -99,10 +122,12 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     elevation: 3, // keeps cards above their frames on Android
   },
-  name: { fontSize: 12.5, textAlign: "center", marginTop: 6, lineHeight: 15 },
+  names: { flex: 1, width: "100%", justifyContent: "center", marginTop: 4 },
+  name: { fontSize: 12.5, textAlign: "center", lineHeight: 15 },
   nameFocus: { fontSize: 14, fontWeight: "600", lineHeight: 17 },
   sub: { fontSize: 11.5, textAlign: "center", lineHeight: 14 },
-  dates: { fontSize: 11, textAlign: "center", marginTop: 3 },
+  dates: { fontSize: 11, textAlign: "center", marginBottom: 6 },
+  badge: { position: "absolute", right: -2, bottom: -2, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   addCircle: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center" },
   addLabel: { fontSize: 12, textAlign: "center", marginTop: 6 },
   plus: { position: "absolute", top: 2, right: 2, padding: 2 },

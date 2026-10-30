@@ -2,12 +2,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { addRelative as addRelativeAction, type RelativeRequest } from "./actions";
 import { buildBackup, parseBackupFiles } from "./backup";
-import { deletePhoto, readPhotoBase64, savePhotoFrom, writePhotoBase64 } from "./files";
+import { deletePhoto, photoExists, readPhotoBase64, savePhotoFrom, writePhotoBase64 } from "./files";
+import { buildFamilyWorkbook } from "./excel-export";
 import { toGedcom } from "./gedcom";
 import { FamilyGraph } from "./graph";
 import { defaultLang, type Lang, translate, type TKey } from "./i18n";
 import { DEFAULT_OPTIONS, type LayoutOptions } from "./layout";
 import { convertLegacy, LEGACY_KEY, type LegacyData } from "./legacy";
+import { joinPersons, mergeSnapshots, pairKey, prepareShare } from "./merge";
+import { buildXlsx, toBase64 } from "./xlsx";
 import { type FamilySnapshot, nowIso, type Person, type Union } from "./model";
 import { openRepo } from "./open-repo";
 import { META, type Repo } from "./repo";
@@ -46,11 +49,18 @@ interface Store {
   removeUnion: (id: string) => Promise<void>;
   setHome: (id: string) => Promise<void>;
   setFamilyName: (name: string) => Promise<void>;
-  backupText: () => Promise<string>;
-  /** Restore from a Waris JSON backup or the old app's CSV files */
-  restore: (texts: string[]) => Promise<number>;
+  /** Backup JSON. Default is the full file with photos; sharing can leave photos or living details out. */
+  backupText: (opts?: { photos?: boolean; hideLiving?: boolean }) => Promise<string>;
+  /** Restore from a Waris JSON backup or the old app's CSV files, replacing or merging */
+  restore: (texts: string[], mode?: "replace" | "merge") => Promise<{ total: number; added: number; updated: number }>;
+  /** Make two records of the same person into one */
+  joinPersons: (keepId: string, dropId: string) => Promise<void>;
+  notDuplicates: Set<string>;
+  markNotDuplicate: (a: string, b: string) => Promise<void>;
   peekBackup: (texts: string[]) => number;
   gedcom: (includeLiving: boolean) => string;
+  /** The whole tree as an Excel workbook, base64-encoded for saving */
+  excelBase64: () => string;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -103,6 +113,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [focusId, setFocusId] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [customTerms, setCustomTerms] = useState<Record<string, string>>({});
+  const [notDuplicates, setNotDuplicates] = useState<Set<string>>(new Set());
 
   const t = useCallback((key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang]);
   const graph = useMemo(() => new FamilyGraph(snapshot), [snapshot]);
@@ -130,6 +141,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         });
         try {
           setCustomTerms(JSON.parse((await repo.getMeta(META.customTerms)) ?? "{}"));
+          setNotDuplicates(new Set(JSON.parse((await repo.getMeta(META.notDuplicates)) ?? "[]") as string[]));
         } catch {
           // ignore a damaged value; terms can be set again
         }
@@ -244,31 +256,67 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       await repo().setMeta(META.familyName, name.trim() || undefined);
       await reload();
     },
-    backupText: async () => {
+    backupText: async (opts = {}) => {
+      const withPhotos = opts.photos ?? true;
+      const data = prepareShare(snapshot, { hideLiving: !!opts.hideLiving });
       const photos: Record<string, string> = {};
-      for (const p of snapshot.persons) {
-        if (!p.photo) continue;
-        const b64 = await readPhotoBase64(p.photo);
-        if (b64) photos[p.photo] = b64;
+      if (withPhotos) {
+        for (const p of data.persons) {
+          if (!p.photo) continue;
+          const b64 = await readPhotoBase64(p.photo);
+          if (b64) photos[p.photo] = b64;
+        }
       }
-      return JSON.stringify(buildBackup(snapshot, photos));
+      return JSON.stringify(buildBackup(data, photos, { photosIncluded: withPhotos, livingHidden: !!opts.hideLiving }));
     },
     peekBackup: (texts) => parseBackupFiles(texts).data.persons.length,
-    restore: async (texts) => {
+    restore: async (texts, mode = "replace") => {
       const parsed = parseBackupFiles(texts);
-      const data = parsed.data;
+      let data = parsed.data;
+      let added = data.persons.length;
+      let updated = 0;
+      let wanted: Set<string> | null = null;
+      if (mode === "merge") {
+        const m = mergeSnapshots(snapshot, data);
+        data = m.snapshot;
+        added = m.added;
+        updated = m.updated;
+        wanted = m.usePhotos;
+      }
+      // Photos: write the ones the file carries; keep ones already on this phone; drop the rest
       for (const p of data.persons) {
         if (!p.photo) continue;
         const b64 = parsed.photos[p.photo];
-        if (!b64 || !(await writePhotoBase64(p.photo, b64))) p.photo = undefined;
+        const take = !wanted || wanted.has(p.photo);
+        if (take && b64 && (await writePhotoBase64(p.photo, b64))) continue;
+        if (await photoExists(p.photo)) continue;
+        p.photo = undefined;
       }
       if (Object.keys(parsed.legacyPhotos).length) await applyLegacyPhotos(data, parsed.legacyPhotos);
       await repo().replaceAll(data);
       const s = await reload();
       setFocusId(s.homePersonId ?? s.persons[0]?.id);
-      return data.persons.length;
+      return { total: data.persons.length, added, updated };
+    },
+    joinPersons: async (keepId, dropId) => {
+      await repo().replaceAll(joinPersons(await repo().load(), keepId, dropId));
+      const s = await reload();
+      if (focusId === dropId) setFocusId(keepId);
+      if (!s.persons.length) setFocusId(undefined);
+    },
+    notDuplicates,
+    markNotDuplicate: async (a, b) => {
+      const next = new Set(notDuplicates).add(pairKey(a, b));
+      setNotDuplicates(next);
+      await repo().setMeta(META.notDuplicates, JSON.stringify([...next]));
     },
     gedcom: (includeLiving) => toGedcom(snapshot, { includeLiving }),
+    excelBase64: () => {
+      const d = new Date();
+      const today = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+      const sheets = buildFamilyWorkbook(graph, { lang, t, homeId: snapshot.homePersonId, customTerms, familyName: snapshot.familyName, today });
+      return toBase64(buildXlsx(sheets));
+    },
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -13,10 +13,14 @@ export interface BackupFile {
   data: FamilySnapshot;
   /** photo file name -> base64 JPEG/PNG */
   photos: Record<string, string>;
+  /** False for the small shared file without photos */
+  photosIncluded?: boolean;
+  /** True when living people's personal details were left out */
+  livingHidden?: boolean;
 }
 
-export function buildBackup(data: FamilySnapshot, photos: Record<string, string>): BackupFile {
-  return { app: "waris", version: 2, exportedAt: new Date().toISOString(), data, photos };
+export function buildBackup(data: FamilySnapshot, photos: Record<string, string>, opts: { photosIncluded?: boolean; livingHidden?: boolean } = {}): BackupFile {
+  return { app: "waris", version: 2, exportedAt: new Date().toISOString(), data, photos, photosIncluded: opts.photosIncluded ?? true, livingHidden: opts.livingHidden ?? false };
 }
 
 export interface ParsedBackup {

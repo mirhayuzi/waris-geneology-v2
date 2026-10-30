@@ -57,7 +57,7 @@ export function Screen({
       <View style={[styles.header, { borderBottomColor: c.border, backgroundColor: c.surface }]}>
         {back ? <IconButton icon="arrow-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} /> : left}
         <View style={styles.titleBox}>
-          <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
+          <Text style={[styles.title, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
             {title}
           </Text>
           {subtitle ? (

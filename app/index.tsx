@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
+import { LifeBadge } from "@/components/TreeCard";
 import { Button, Icon, IconButton, Muted, Screen } from "@/components/ui";
 import { type Card, layoutTree } from "@/lib/layout";
 import { fullName } from "@/lib/model";
@@ -116,6 +117,13 @@ export default function TreeScreen() {
         <View style={[styles.optRow, { gap: 10 }]}>
           <Button title="−" kind="secondary" onPress={() => canvas.current?.zoomBy(1 / 1.4)} style={{ flex: 1 }} />
           <Button title="+" kind="secondary" onPress={() => canvas.current?.zoomBy(1.4)} style={{ flex: 1 }} />
+        </View>
+        <View style={[styles.optRow, { gap: 8 }]}>
+          <LifeBadge living size={16} inline />
+          <Muted>{t("living")}</Muted>
+          <View style={{ width: 12 }} />
+          <LifeBadge living={false} size={16} inline />
+          <Muted>{t("deceased")}</Muted>
         </View>
         <Muted style={{ marginTop: 12 }}>{t("tapHint")}</Muted>
       </Sheet>

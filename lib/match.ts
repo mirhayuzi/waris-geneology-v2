@@ -60,3 +60,25 @@ export function possibleDuplicates(
   }
   return out;
 }
+
+/**
+ * People with a bin/binti name but no father linked, where a man of that name is in
+ * the tree. Closest candidates first; a candidate's wife is the likely mother.
+ */
+export function unlinkedPeople(graph: FamilyGraph): { person: Person; candidates: Person[] }[] {
+  const out: { person: Person; candidates: Person[] }[] = [];
+  for (const p of graph.persons.values()) {
+    if (!p.fatherName?.trim() || graph.father(p.id)) continue;
+    const want = norm(p.fatherName).split(" ")[0];
+    const candidates = fatherCandidates(graph, p.fatherName, p.id, 6).filter((f) => {
+      // Only men whose own name matches (not ones whose father has that name)
+      if (!norm(f.givenName).includes(want)) return false;
+      // A man born after the child can't be the father
+      const fy = year(f.birthDate);
+      const cy = year(p.birthDate);
+      return !(fy && cy && fy >= cy);
+    });
+    if (candidates.length) out.push({ person: p, candidates: candidates.slice(0, 3) });
+  }
+  return out.sort((a, b) => a.person.givenName.localeCompare(b.person.givenName));
+}

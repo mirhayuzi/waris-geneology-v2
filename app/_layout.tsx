@@ -26,6 +26,9 @@ function Gate() {
       <Stack.Screen name="union" options={{ presentation: "modal" }} />
       <Stack.Screen name="relate" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="unlinked" />
+      <Stack.Screen name="duplicates" />
+      <Stack.Screen name="print" />
     </Stack>
   );
 }

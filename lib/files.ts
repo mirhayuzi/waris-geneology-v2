@@ -95,10 +95,11 @@ export async function pickTextFiles(): Promise<{ name: string; text: string }[]>
  * (Downloads, Drive, etc.). iOS: share sheet ("Save to Files").
  * Returns false if the user cancelled.
  */
-export async function saveTextFile(name: string, text: string, mime: string): Promise<boolean> {
+export async function saveTextFile(name: string, text: string, mime: string, opts: { base64?: boolean } = {}): Promise<boolean> {
+  const encoding = opts.base64 ? { encoding: FileSystem.EncodingType.Base64 } : undefined;
   if (Platform.OS === "web") {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+    a.href = opts.base64 ? `data:${mime};base64,${text}` : URL.createObjectURL(new Blob([text], { type: mime }));
     a.download = name;
     a.click();
     return true;
@@ -110,12 +111,46 @@ export async function saveTextFile(name: string, text: string, mime: string): Pr
     // Android adds the extension for known types (.json); unknown types keep the name as given
     const display = mime === "application/json" ? name.replace(/\.json$/, "") : name;
     const uri = await SAF.createFileAsync(perm.directoryUri, display, mime);
-    await FileSystem.writeAsStringAsync(uri, text);
+    await FileSystem.writeAsStringAsync(uri, text, encoding);
     return true;
   }
   const path = `${FileSystem.cacheDirectory}${name}`;
-  await FileSystem.writeAsStringAsync(path, text);
+  await FileSystem.writeAsStringAsync(path, text, encoding);
   if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(path, { mimeType: mime, dialogTitle: name });
   return true;
 }
+
+/** True when a stored photo name already has its file on this phone. */
+export async function photoExists(photo: string): Promise<boolean> {
+  const uri = photoUri(photo);
+  if (!uri || Platform.OS === "web") return false;
+  try {
+    return (await FileSystem.getInfoAsync(uri)).exists;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Opens the phone's share sheet (WhatsApp, Gmail, Drive ...) with a file.
+ * Returns false when sharing isn't available.
+ */
+export async function shareFile(name: string, content: string, mime: string, opts: { base64?: boolean } = {}): Promise<boolean> {
+  if (Platform.OS === "web") return saveTextFile(name, content, mime);
+  const path = `${FileSystem.cacheDirectory}${name}`;
+  await FileSystem.writeAsStringAsync(path, content, opts.base64 ? { encoding: FileSystem.EncodingType.Base64 } : undefined);
+  if (!(await Sharing.isAvailableAsync())) return false;
+  const UTI = mime === "application/pdf" ? "com.adobe.pdf" : mime === XLSX_MIME ? "org.openxmlformats.spreadsheetml.sheet" : "public.json";
+  await Sharing.shareAsync(path, { mimeType: mime, dialogTitle: name, UTI });
+  return true;
+}
+
+/** Shares a file that already exists (e.g. a PDF made by expo-print). */
+export async function shareExisting(uri: string, mime: string, title: string): Promise<boolean> {
+  if (!(await Sharing.isAvailableAsync())) return false;
+  await Sharing.shareAsync(uri, { mimeType: mime, dialogTitle: title });
+  return true;
+}
+
+export const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

@@ -29,6 +29,8 @@ export const META = {
   legacyImported: "legacy_imported",
   /** JSON map: kind-of-link key -> the user's own term (e.g. "makcik ipar") */
   customTerms: "custom_terms",
+  /** JSON list of pairKey()s the user said are different people */
+  notDuplicates: "not_duplicates",
 } as const;
 
 export class MemoryRepo implements Repo {
