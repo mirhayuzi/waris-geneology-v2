@@ -8,6 +8,9 @@ import { TreeCard } from "./TreeCard";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2.5;
+/** Fit the whole tree only if names stay readable at that size */
+const FIT_MIN = 0.6;
+const READABLE = 0.9;
 
 export interface TreeCanvasHandle {
   /** Fit the tree on screen, centred on the focus person. */
@@ -41,7 +44,9 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanva
   const fitScale = useCallback(() => {
     if (!view.w || !view.h) return 1;
     const s = Math.min(view.w / layout.width, view.h / layout.height, 1);
-    return Math.max(Math.min(s, 1), 0.4);
+    // A small family fits whole on screen. A big one would shrink to unreadable dots, so
+    // start at a readable size around the centre person instead (pinch out for the overview)
+    return s >= FIT_MIN ? s : READABLE;
   }, [view, layout.width, layout.height]);
 
   const recenter = useCallback(
