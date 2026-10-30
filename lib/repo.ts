@@ -27,6 +27,8 @@ export const META = {
   treeDown: "tree_down",
   treeAdd: "tree_add",
   legacyImported: "legacy_imported",
+  /** "1" while the tree is being drawn; still "1" at the next launch means drawing crashed */
+  treeDrawing: "tree_drawing",
   /** JSON map: kind-of-link key -> the user's own term (e.g. "makcik ipar") */
   customTerms: "custom_terms",
   /** JSON list of pairKey()s the user said are different people */

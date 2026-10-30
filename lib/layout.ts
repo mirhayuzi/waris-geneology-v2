@@ -277,3 +277,26 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
 function opposite(sex: Sex): Sex {
   return sex === "male" ? "female" : "male";
 }
+
+/**
+ * A connector line as straight horizontal/vertical bars (x, y, width, height), so the
+ * tree can draw them as plain views. A single SVG the size of the whole tree is drawn
+ * into one bitmap on Android, which runs out of memory on wide trees.
+ */
+export function lineBars(line: Line, thickness: number): { x: number; y: number; w: number; h: number }[] {
+  const out: { x: number; y: number; w: number; h: number }[] = [];
+  const t = thickness / 2;
+  const p = line.points;
+  const bar = (x1: number, y1: number, x2: number, y2: number) => {
+    if (y1 === y2 && x1 === x2) return;
+    if (y1 === y2) out.push({ x: Math.min(x1, x2) - t, y: y1 - t, w: Math.abs(x2 - x1) + thickness, h: thickness });
+    else if (x1 === x2) out.push({ x: x1 - t, y: Math.min(y1, y2) - t, w: thickness, h: Math.abs(y2 - y1) + thickness });
+    else {
+      // not expected from the layout; draw as an elbow
+      bar(x1, y1, x2, y1);
+      bar(x2, y1, x2, y2);
+    }
+  };
+  for (let i = 0; i + 3 < p.length; i += 2) bar(p[i], p[i + 1], p[i + 2], p[i + 3]);
+  return out;
+}

@@ -222,6 +222,9 @@ const en = {
   printedOn: "Printed {date} · Waris",
   peopleCount: "{n} people",
   gensCount: "{n} generations",
+  treeReset: "The tree could not be shown last time, so the tree view was reset to 3 generations up and 2 down. Your family data is safe.",
+  treeError: "The tree could not be shown with these settings. Your family data is safe.",
+  resetView: "Reset tree view",
   exportExcel: "Export to Excel (whole list)",
   exportExcelDesc: "Everyone in one Excel file: family outline by generation, people, marriages, parents and children, with totals. Opens in Excel, Google Sheets or WPS.",
 };
@@ -450,6 +453,9 @@ const bm: Record<TKey, string> = {
   printedOn: "Dicetak {date} · Waris",
   peopleCount: "{n} orang",
   gensCount: "{n} generasi",
+  treeReset: "Salasilah tidak dapat dipaparkan kali lepas, jadi paparan ditetapkan semula kepada 3 generasi ke atas dan 2 ke bawah. Data keluarga anda selamat.",
+  treeError: "Salasilah tidak dapat dipaparkan dengan tetapan ini. Data keluarga anda selamat.",
+  resetView: "Tetapkan semula paparan",
   exportExcel: "Eksport ke Excel (senarai penuh)",
   exportExcelDesc: "Semua ahli dalam satu fail Excel: susur galur ikut generasi, ahli, perkahwinan, ibu bapa dan anak, dengan jumlah. Boleh dibuka di Excel, Google Sheets atau WPS.",
 };

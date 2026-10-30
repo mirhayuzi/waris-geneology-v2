@@ -1,9 +1,8 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withDecay, withTiming } from "react-native-reanimated";
-import Svg, { Polyline } from "react-native-svg";
-import type { Card, TreeLayout } from "@/lib/layout";
+import { type Card, lineBars, type TreeLayout } from "@/lib/layout";
 import { useColors } from "@/lib/theme";
 import { TreeCard } from "./TreeCard";
 
@@ -141,17 +140,18 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, Props>(function TreeCanva
     transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }],
   }));
 
+  // Connector lines as thin views: memory stays small however wide the tree is
+  const bars = useMemo(() => layout.lines.flatMap((l) => lineBars(l, 1.6).map((b, i) => ({ ...b, key: `${l.key}-${i}` }))), [layout.lines]);
+
   const onLayout = (e: LayoutChangeEvent) => setView({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
 
   return (
     <GestureDetector gesture={gesture}>
       <View style={[styles.fill, { backgroundColor: c.canvas }]} onLayout={onLayout} collapsable={false}>
         <Animated.View style={[{ width: layout.width, height: layout.height, transformOrigin: "left top" }, style]}>
-          <Svg width={layout.width} height={layout.height} style={StyleSheet.absoluteFill} pointerEvents="none">
-            {layout.lines.map((l) => (
-              <Polyline key={l.key} points={l.points.join(",")} fill="none" stroke={c.line} strokeWidth={1.6} strokeLinejoin="round" />
-            ))}
-          </Svg>
+          {bars.map((b) => (
+            <View key={b.key} pointerEvents="none" style={{ position: "absolute", left: b.x, top: b.y, width: b.w, height: b.h, backgroundColor: c.line }} />
+          ))}
           {layout.frames.map((f) => (
             <View
               key={f.key}

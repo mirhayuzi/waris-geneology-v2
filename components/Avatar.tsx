@@ -1,7 +1,6 @@
 import { Image } from "expo-image";
 import { memo } from "react";
 import { View } from "react-native";
-import Svg, { Circle, ClipPath, Defs, Path } from "react-native-svg";
 import { photoUri } from "@/lib/files";
 import type { Person, Sex } from "@/lib/model";
 import { useColors } from "@/lib/theme";
@@ -20,28 +19,24 @@ export const Avatar = memo(function Avatar({ person, sex, size }: { person?: Per
   }
   const bg = s === "female" ? c.femaleSoft : c.maleSoft;
   const fg = s === "female" ? c.femaleDark : c.maleDark;
-  const id = `clip-${size}`;
+  // Drawn with plain views, not SVG: on Android every SVG becomes its own bitmap,
+  // which adds up to a lot of memory on a big tree
+  const at = (x: number, y: number, w: number, h: number, extra?: object) => ({ position: "absolute" as const, left: x * size, top: y * size, width: w * size, height: h * size, backgroundColor: fg, ...extra });
   return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Defs>
-        <ClipPath id={id}>
-          <Circle cx="50" cy="50" r="50" />
-        </ClipPath>
-      </Defs>
-      <Circle cx="50" cy="50" r="50" fill={bg} />
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", backgroundColor: bg }}>
       {s === "female" ? (
         <>
-          {/* long hair behind the head and shoulders */}
-          <Path d="M50 17c-15 0-24 10-24 25 0 12-4 20-7 28h62c-3-8-7-16-7-28 0-15-9-25-24-25z" fill={fg} opacity={0.85} />
-          <Circle cx="50" cy="40" r="17" fill={fg} />
-          <Path d="M14 104c2-20 18-31 36-31s34 11 36 31z" fill={fg} clipPath={`url(#${id})`} />
+          {/* long hair behind the head */}
+          <View style={at(0.27, 0.18, 0.46, 0.52, { borderTopLeftRadius: 0.23 * size, borderTopRightRadius: 0.23 * size, opacity: 0.85 })} />
+          <View style={at(0.33, 0.23, 0.34, 0.34, { borderRadius: 0.17 * size })} />
+          <View style={at(0.14, 0.73, 0.72, 0.72, { borderRadius: 0.36 * size })} />
         </>
       ) : (
         <>
-          <Circle cx="50" cy="40" r="19" fill={fg} />
-          <Path d="M12 104c2-22 18-34 38-34s36 12 38 34z" fill={fg} clipPath={`url(#${id})`} />
+          <View style={at(0.31, 0.21, 0.38, 0.38, { borderRadius: 0.19 * size })} />
+          <View style={at(0.12, 0.7, 0.76, 0.76, { borderRadius: 0.38 * size })} />
         </>
       )}
-    </Svg>
+    </View>
   );
 });

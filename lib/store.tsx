@@ -26,6 +26,8 @@ interface Store {
   setLang: (l: Lang) => void;
   treeOptions: LayoutOptions;
   setTreeOptions: (o: LayoutOptions) => void;
+  /** The tree screen calls this once the tree has been on screen for a moment */
+  treeDrawn: () => void;
   /** Person in the middle of the tree view */
   focusId?: string;
   setFocus: (id: string) => void;
@@ -132,13 +134,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const moved = await migrateLegacy(repo);
         const l = (await repo.getMeta(META.language)) as Lang | undefined;
         if (l === "en" || l === "bm") setLangState(l);
-        const up = await repo.getMeta(META.treeUp);
-        const down = await repo.getMeta(META.treeDown);
-        setTreeOptionsState({
-          up: up ? Number(up) : DEFAULT_OPTIONS.up,
-          down: down ? Number(down) : DEFAULT_OPTIONS.down,
+        const num = (v: string | undefined, def: number, max: number) => {
+          const n = Number(v);
+          return v && Number.isInteger(n) && n >= 0 && n <= max ? n : def;
+        };
+        let opts: LayoutOptions = {
+          up: num(await repo.getMeta(META.treeUp), DEFAULT_OPTIONS.up, 6),
+          down: num(await repo.getMeta(META.treeDown), DEFAULT_OPTIONS.down, 4),
           showAdd: (await repo.getMeta(META.treeAdd)) !== "0",
-        });
+        };
+        // The last launch stopped while drawing the tree (crash): start with the default view
+        if ((await repo.getMeta(META.treeDrawing)) === "1") {
+          opts = DEFAULT_OPTIONS;
+          await repo.setMeta(META.treeUp, String(opts.up));
+          await repo.setMeta(META.treeDown, String(opts.down));
+          await repo.setMeta(META.treeAdd, "1");
+          setNotice(translate(l === "en" || l === "bm" ? l : defaultLang(), "treeReset"));
+        }
+        await repo.setMeta(META.treeDrawing, "1");
+        setTreeOptionsState(opts);
         try {
           setCustomTerms(JSON.parse((await repo.getMeta(META.customTerms)) ?? "{}"));
           setNotDuplicates(new Set(JSON.parse((await repo.getMeta(META.notDuplicates)) ?? "[]") as string[]));
@@ -177,10 +191,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     treeOptions,
     setTreeOptions: (o) => {
-      setTreeOptionsState(o);
-      repo().setMeta(META.treeUp, String(o.up));
-      repo().setMeta(META.treeDown, String(o.down));
-      repo().setMeta(META.treeAdd, o.showAdd ? "1" : "0");
+      // Mark "drawing" before the new tree is shown, so a crash is undone next launch
+      repo()
+        .setMeta(META.treeDrawing, "1")
+        .finally(() => {
+          setTreeOptionsState(o);
+          repo().setMeta(META.treeUp, String(o.up));
+          repo().setMeta(META.treeDown, String(o.down));
+          repo().setMeta(META.treeAdd, o.showAdd ? "1" : "0");
+        });
+    },
+    treeDrawn: () => {
+      repo().setMeta(META.treeDrawing, undefined);
     },
     focusId,
     setFocus: setFocusId,

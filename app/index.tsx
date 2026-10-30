@@ -1,23 +1,31 @@
 import { router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
 import { LifeBadge } from "@/components/TreeCard";
 import { Button, Icon, IconButton, Muted, Screen } from "@/components/ui";
-import { type Card, layoutTree } from "@/lib/layout";
+import { type Card, DEFAULT_OPTIONS, layoutTree } from "@/lib/layout";
 import { fullName } from "@/lib/model";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
 
 export default function TreeScreen() {
   const c = useColors();
-  const { graph, focusId, setFocus, homeId, treeOptions, setTreeOptions, t, notice, clearNotice } = useStore();
+  const { graph, focusId, setFocus, homeId, treeOptions, setTreeOptions, treeDrawn, t, notice, clearNotice } = useStore();
   const canvas = useRef<TreeCanvasHandle>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [optsOpen, setOptsOpen] = useState(false);
 
   const layout = useMemo(() => (focusId ? layoutTree(graph, focusId, treeOptions) : null), [graph, focusId, treeOptions]);
+
+  // Once the tree has been on screen for a moment, it drew fine: clear the crash marker
+  useEffect(() => {
+    const timer = setTimeout(treeDrawn, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout]);
   const focus = graph.get(focusId);
   const home = graph.get(homeId);
   // The title follows whoever the tree is centred on; the saved family name stays underneath
@@ -68,7 +76,24 @@ export default function TreeScreen() {
 
   return (
     <Screen title={title} subtitle={subtitle} left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />} right={header} bg={c.canvas}>
-      <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} />
+      <ErrorBoundary
+        fallback={(reset) => (
+          <View style={styles.welcome}>
+            <Icon name="warning-amber" size={48} color={c.danger} />
+            <Muted style={{ textAlign: "center", marginVertical: 16 }}>{t("treeError")}</Muted>
+            <Button
+              title={t("resetView")}
+              icon="restart-alt"
+              onPress={() => {
+                setTreeOptions(DEFAULT_OPTIONS);
+                reset();
+              }}
+            />
+          </View>
+        )}
+      >
+        <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} />
+      </ErrorBoundary>
 
       {notice ? (
         <Pressable onPress={clearNotice} style={[styles.notice, { backgroundColor: c.primary }]}>
