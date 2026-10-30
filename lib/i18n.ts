@@ -120,7 +120,6 @@ const en = {
   generationsDown: "Generations down",
   showPlaceholders: "Show “Add” boxes",
   classicTree: "Classic tree (simpler drawing)",
-  fullProfile: "Open full profile",
   center: "Centre",
   goHome: "Home person",
   tapHint: "Tap a person to move the tree. Tap the centre person to open their profile. Tap − under a family to fold it away, +N to open it again.",
@@ -387,7 +386,6 @@ const bm: Record<TKey, string> = {
   generationsDown: "Generasi ke bawah",
   showPlaceholders: "Tunjuk kotak “Tambah”",
   classicTree: "Salasilah klasik (lukisan ringkas)",
-  fullProfile: "Buka profil penuh",
   center: "Tengahkan",
   goHome: "Orang utama",
   tapHint:

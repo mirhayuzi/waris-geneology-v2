@@ -1,8 +1,7 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ProfileView } from "@/components/ProfileView";
 import { SkiaTree } from "@/components/SkiaTree";
 import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
@@ -19,9 +18,6 @@ export default function TreeScreen() {
   const store = useStore();
   const { graph, focusId, setFocus, homeId, treeOptions, setTreeOptions, treeDrawn, t, notice, clearNotice } = store;
   const [backingUp, setBackingUp] = useState(false);
-  // Big tablet screens (e.g. Xiaomi Pad in landscape): tree on the left, profile on the right
-  const { width } = useWindowDimensions();
-  const twoPanel = width >= 900;
 
   // One tap: the full backup (with photos) goes to the share sheet, e.g. Google Drive
   const backupNow = async () => {
@@ -199,22 +195,6 @@ export default function TreeScreen() {
             </Pressable>
           </View>
         </View>
-        {twoPanel ? (
-          <View
-            style={[
-              styles.panel,
-              {
-                width: Math.min(460, width * 0.4),
-                backgroundColor: c.background,
-                borderLeftColor: c.border,
-              },
-            ]}
-          >
-            <ErrorBoundary fallback={() => <Muted style={{ margin: 24 }}>{t("treeError")}</Muted>}>
-              <ProfileView key={focus.id} id={focus.id} panel />
-            </ErrorBoundary>
-          </View>
-        ) : null}
       </View>
 
       <Sheet visible={addOpen} onClose={() => setAddOpen(false)} title={focus.givenName}>
@@ -339,6 +319,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  panel: { borderLeftWidth: StyleSheet.hairlineWidth },
   optRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
 });
