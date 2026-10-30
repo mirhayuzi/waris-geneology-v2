@@ -1,7 +1,9 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProfileView } from "@/components/ProfileView";
+import { SkiaTree } from "@/components/SkiaTree";
 import { Sheet, SheetItem } from "@/components/Sheet";
 import { TreeCanvas, type TreeCanvasHandle } from "@/components/TreeCanvas";
 import { LifeBadge } from "@/components/TreeCard";
@@ -17,6 +19,9 @@ export default function TreeScreen() {
   const store = useStore();
   const { graph, focusId, setFocus, homeId, treeOptions, setTreeOptions, treeDrawn, t, notice, clearNotice } = store;
   const [backingUp, setBackingUp] = useState(false);
+  // Big tablet screens (e.g. Xiaomi Pad in landscape): tree on the left, profile on the right
+  const { width } = useWindowDimensions();
+  const twoPanel = width >= 900;
 
   // One tap: the full backup (with photos) goes to the share sheet, e.g. Google Drive
   const backupNow = async () => {
@@ -35,7 +40,19 @@ export default function TreeScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [optsOpen, setOptsOpen] = useState(false);
 
-  const layout = useMemo(() => (focusId ? layoutTree(graph, focusId, treeOptions) : null), [graph, focusId, treeOptions]);
+  // Families folded away with the "−" button (game-style tree only)
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const layout = useMemo(
+    () => (focusId ? layoutTree(graph, focusId, treeOptions.classic ? treeOptions : { ...treeOptions, collapsed }) : null),
+    [graph, focusId, treeOptions, collapsed],
+  );
+  const onPressBranch = (card: Card) => {
+    const id = card.person?.id;
+    if (!id || !card.chip) return;
+    if (card.chip.open) setCollapsed((s) => [...s, id]);
+    else if (card.hidden !== undefined) setCollapsed((s) => s.filter((x) => x !== id));
+    else setFocus(id); // more generations below than shown: move the tree there
+  };
 
   // Once the tree has been on screen for a moment, it drew fine: clear the crash marker
   useEffect(() => {
@@ -51,7 +68,10 @@ export default function TreeScreen() {
 
   const onPressCard = (card: Card) => {
     if (card.add) {
-      router.push({ pathname: "/edit", params: { role: card.add.role, of: card.add.of } });
+      router.push({
+        pathname: "/edit",
+        params: { role: card.add.role, of: card.add.of },
+      });
     } else if (card.person) {
       if (card.focus) router.push(`/person/${card.person.id}`);
       else setFocus(card.person.id);
@@ -92,60 +112,109 @@ export default function TreeScreen() {
   const hasParents = graph.parents(focus.id).length > 0;
 
   return (
-    <Screen wide title={title} subtitle={subtitle} left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />} right={header} bg={c.canvas}>
-      <ErrorBoundary
-        fallback={(reset) => (
-          <View style={styles.welcome}>
-            <Icon name="warning-amber" size={48} color={c.danger} />
-            <Muted style={{ textAlign: "center", marginVertical: 16 }}>{t("treeError")}</Muted>
-            <Button
-              title={t("resetView")}
-              icon="restart-alt"
-              onPress={() => {
-                setTreeOptions(DEFAULT_OPTIONS);
-                reset();
-              }}
-            />
-          </View>
-        )}
-      >
-        <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} />
-      </ErrorBoundary>
+    <Screen
+      wide
+      title={title}
+      subtitle={subtitle}
+      left={<IconButton icon="menu" label={t("settings")} onPress={() => router.push("/settings")} />}
+      right={header}
+      bg={c.canvas}
+    >
+      <View style={{ flex: 1, flexDirection: "row" }}>
+        <View style={{ flex: 1 }}>
+          <ErrorBoundary
+            fallback={(reset) => (
+              <View style={styles.welcome}>
+                <Icon name="warning-amber" size={48} color={c.danger} />
+                <Muted style={{ textAlign: "center", marginVertical: 16 }}>{t("treeError")}</Muted>
+                <Button
+                  title={t("resetView")}
+                  icon="restart-alt"
+                  onPress={() => {
+                    setTreeOptions({ ...DEFAULT_OPTIONS, classic: true });
+                    reset();
+                  }}
+                />
+              </View>
+            )}
+          >
+            {treeOptions.classic ? (
+              <TreeCanvas ref={canvas} layout={layout} onPressCard={onPressCard} onLongPressCard={onLongPressCard} onPressFocusAdd={() => setAddOpen(true)} />
+            ) : (
+              <SkiaTree
+                ref={canvas}
+                layout={layout}
+                onPressCard={onPressCard}
+                onLongPressCard={onLongPressCard}
+                onPressFocusAdd={() => setAddOpen(true)}
+                onPressBranch={onPressBranch}
+              />
+            )}
+          </ErrorBoundary>
 
-      {notice ? (
-        <Pressable onPress={clearNotice} style={[styles.notice, { backgroundColor: c.primary }]}>
-          <Text style={{ color: c.primaryText, flex: 1 }}>{notice}</Text>
-          <Icon name="close" size={20} color={c.primaryText} />
-        </Pressable>
-      ) : store.backupDue ? (
-        <View style={[styles.notice, { backgroundColor: c.surface, borderColor: c.focusRing, borderWidth: 1.5, flexDirection: "column", alignItems: "stretch" }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Icon name="cloud-upload" size={26} color={c.focusRing} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("backupRemindTitle")}</Text>
-              <Muted>{t("backupRemindBody", { n: store.changesSinceBackup })}</Muted>
+          {notice ? (
+            <Pressable onPress={clearNotice} style={[styles.notice, { backgroundColor: c.primary }]}>
+              <Text style={{ color: c.primaryText, flex: 1 }}>{notice}</Text>
+              <Icon name="close" size={20} color={c.primaryText} />
+            </Pressable>
+          ) : store.backupDue ? (
+            <View
+              style={[
+                styles.notice,
+                {
+                  backgroundColor: c.surface,
+                  borderColor: c.focusRing,
+                  borderWidth: 1.5,
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                },
+              ]}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Icon name="cloud-upload" size={26} color={c.focusRing} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("backupRemindTitle")}</Text>
+                  <Muted>{t("backupRemindBody", { n: store.changesSinceBackup })}</Muted>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                <Button title={t("later")} kind="secondary" onPress={store.snoozeBackup} disabled={backingUp} style={{ flex: 1, height: 40 }} />
+                <Button title={t("backupNow")} icon="backup" onPress={backupNow} disabled={backingUp} style={{ flex: 1, height: 40 }} />
+              </View>
+              {backingUp ? <ActivityIndicator color={c.primary} style={{ marginTop: 8 }} /> : null}
             </View>
-          </View>
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-            <Button title={t("later")} kind="secondary" onPress={store.snoozeBackup} disabled={backingUp} style={{ flex: 1, height: 40 }} />
-            <Button title={t("backupNow")} icon="backup" onPress={backupNow} disabled={backingUp} style={{ flex: 1, height: 40 }} />
-          </View>
-          {backingUp ? <ActivityIndicator color={c.primary} style={{ marginTop: 8 }} /> : null}
-        </View>
-      ) : null}
+          ) : null}
 
-      <View style={styles.fabs}>
-        {home && home.id !== focus.id ? (
-          <Pressable style={[styles.smallFab, { backgroundColor: c.surface }]} onPress={() => setFocus(home.id)} accessibilityLabel={t("goHome")}>
-            <Icon name="home" size={24} color={c.primary} />
-          </Pressable>
+          <View style={styles.fabs}>
+            {home && home.id !== focus.id ? (
+              <Pressable style={[styles.smallFab, { backgroundColor: c.surface }]} onPress={() => setFocus(home.id)} accessibilityLabel={t("goHome")}>
+                <Icon name="home" size={24} color={c.primary} />
+              </Pressable>
+            ) : null}
+            <Pressable style={[styles.smallFab, { backgroundColor: c.surface }]} onPress={() => canvas.current?.recenter()} accessibilityLabel={t("center")}>
+              <Icon name="center-focus-strong" size={24} color={c.primary} />
+            </Pressable>
+            <Pressable style={[styles.fab, { backgroundColor: c.accent }]} onPress={() => setOptsOpen(true)} accessibilityLabel={t("treeOptions")}>
+              <Icon name="tune" size={30} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
+        {twoPanel ? (
+          <View
+            style={[
+              styles.panel,
+              {
+                width: Math.min(460, width * 0.4),
+                backgroundColor: c.background,
+                borderLeftColor: c.border,
+              },
+            ]}
+          >
+            <ErrorBoundary fallback={() => <Muted style={{ margin: 24 }}>{t("treeError")}</Muted>}>
+              <ProfileView key={focus.id} id={focus.id} panel />
+            </ErrorBoundary>
+          </View>
         ) : null}
-        <Pressable style={[styles.smallFab, { backgroundColor: c.surface }]} onPress={() => canvas.current?.recenter()} accessibilityLabel={t("center")}>
-          <Icon name="center-focus-strong" size={24} color={c.primary} />
-        </Pressable>
-        <Pressable style={[styles.fab, { backgroundColor: c.accent }]} onPress={() => setOptsOpen(true)} accessibilityLabel={t("treeOptions")}>
-          <Icon name="tune" size={30} color="#fff" />
-        </Pressable>
       </View>
 
       <Sheet visible={addOpen} onClose={() => setAddOpen(false)} title={focus.givenName}>
@@ -171,6 +240,10 @@ export default function TreeScreen() {
           <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{t("showPlaceholders")}</Text>
           <Switch value={treeOptions.showAdd} onValueChange={(showAdd) => setTreeOptions({ ...treeOptions, showAdd })} trackColor={{ true: c.primary }} />
         </View>
+        <View style={styles.optRow}>
+          <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{t("classicTree")}</Text>
+          <Switch value={!!treeOptions.classic} onValueChange={(classic) => setTreeOptions({ ...treeOptions, classic })} trackColor={{ true: c.primary }} />
+        </View>
         <View style={[styles.optRow, { gap: 10 }]}>
           <Button title="−" kind="secondary" onPress={() => canvas.current?.zoomBy(1 / 1.4)} style={{ flex: 1 }} />
           <Button title="+" kind="secondary" onPress={() => canvas.current?.zoomBy(1.4)} style={{ flex: 1 }} />
@@ -194,18 +267,78 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
     <View style={styles.optRow}>
       <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{label}</Text>
       <IconButton icon="remove-circle-outline" label="-" onPress={() => onChange(Math.max(min, value - 1))} color={c.primary} />
-      <Text style={{ color: c.text, fontSize: 18, width: 28, textAlign: "center", fontWeight: "600" }}>{value}</Text>
+      <Text
+        style={{
+          color: c.text,
+          fontSize: 18,
+          width: 28,
+          textAlign: "center",
+          fontWeight: "600",
+        }}
+      >
+        {value}
+      </Text>
       <IconButton icon="add-circle-outline" label="+" onPress={() => onChange(Math.min(max, value + 1))} color={c.primary} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  welcome: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  welcomeTitle: { fontSize: 22, fontWeight: "700", marginTop: 16, marginBottom: 8, textAlign: "center" },
-  fabs: { position: "absolute", right: 18, bottom: 28, alignItems: "center", gap: 12 },
-  fab: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", elevation: 6, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
-  smallFab: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  notice: { position: "absolute", top: 12, left: 12, right: 12, borderRadius: 12, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  welcome: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  fabs: {
+    position: "absolute",
+    right: 18,
+    bottom: 28,
+    alignItems: "center",
+    gap: 12,
+  },
+  fab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  smallFab: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  notice: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    right: 12,
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  panel: { borderLeftWidth: StyleSheet.hairlineWidth },
   optRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
 });

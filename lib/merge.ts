@@ -89,7 +89,11 @@ export function mergeSnapshots(local: FamilySnapshot, incoming: FamilySnapshot):
     const existing = pairs.get(pairOf(u));
     if (existing) {
       const mine = unions.get(existing)!;
-      unions.set(existing, { ...u, ...Object.fromEntries(Object.entries(mine).filter(([, v]) => !empty(v))), id: existing } as Union);
+      unions.set(existing, {
+        ...u,
+        ...Object.fromEntries(Object.entries(mine).filter(([, v]) => !empty(v))),
+        id: existing,
+      } as Union);
     } else {
       unions.set(u.id, u);
       pairs.set(pairOf(u), u.id);
@@ -117,10 +121,7 @@ export function mergeSnapshots(local: FamilySnapshot, incoming: FamilySnapshot):
   };
 }
 
-const norm = (s: string | undefined) =>
-  (s ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+const norm = (s: string | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
  * Pairs of people who are probably the same person entered twice (e.g. two relatives
@@ -137,16 +138,20 @@ export function duplicatePairs(graph: FamilyGraph, dismissed: Set<string> = new 
   }
   const out: [Person, Person][] = [];
   for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    // work out each person's father name and birth year once, not once per pair
+    const fathers = list.map((p) => norm(p.fatherName ?? graph.father(p.id)?.givenName));
+    const years = list.map((p) => yearOf(p.birthDate));
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const [a, b] = [list[i], list[j]];
-        if (dismissed.has(pairKey(a.id, b.id))) continue;
-        const fa = norm(a.fatherName ?? graph.father(a.id)?.givenName);
-        const fb = norm(b.fatherName ?? graph.father(b.id)?.givenName);
+        const fa = fathers[i];
+        const fb = fathers[j];
         if (fa && fb && fa !== fb) continue;
-        const ya = yearOf(a.birthDate);
-        const yb = yearOf(b.birthDate);
+        const ya = years[i];
+        const yb = years[j];
         if (ya && yb && Math.abs(ya - yb) > 2) continue;
+        if (dismissed.has(pairKey(a.id, b.id))) continue;
         if (graph.isAncestor(a.id, b.id) || graph.isAncestor(b.id, a.id) || graph.unionBetween(a.id, b.id)) continue;
         out.push([a, b]);
       }
@@ -189,5 +194,11 @@ export function joinPersons(s: FamilySnapshot, keepId: string, dropId: string): 
     seenPairs.add(k);
     unions.push({ ...u, partnerA, partnerB });
   }
-  return { ...s, persons, links, unions, homePersonId: s.homePersonId === dropId ? keepId : s.homePersonId };
+  return {
+    ...s,
+    persons,
+    links,
+    unions,
+    homePersonId: s.homePersonId === dropId ? keepId : s.homePersonId,
+  };
 }

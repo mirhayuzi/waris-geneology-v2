@@ -62,7 +62,10 @@ const FILLS = [
   `<fill><patternFill patternType="solid"><fgColor rgb="FFE8EBF7"/><bgColor indexed="64"/></patternFill></fill>`, // 3 light indigo
   `<fill><patternFill patternType="solid"><fgColor rgb="FFFFF8DC"/><bgColor indexed="64"/></patternFill></fill>`, // 4 input
 ];
-const BORDERS = [`<border><left/><right/><top/><bottom/><diagonal/></border>`, `<border><left/><right/><top/><bottom style="thin"><color rgb="FFD5D5D5"/></bottom><diagonal/></border>`];
+const BORDERS = [
+  `<border><left/><right/><top/><bottom/><diagonal/></border>`,
+  `<border><left/><right/><top/><bottom style="thin"><color rgb="FFD5D5D5"/></bottom><diagonal/></border>`,
+];
 
 interface Xf {
   font: number;
@@ -180,7 +183,10 @@ function sheetXml(sh: SheetSpec): string {
     : "";
   const lists = sh.lists?.length
     ? `<dataValidations count="${sh.lists.length}">${sh.lists
-        .map((l) => `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${l.sqref}"><formula1>"${esc(l.values.join(","))}"</formula1></dataValidation>`)
+        .map(
+          (l) =>
+            `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${l.sqref}"><formula1>"${esc(l.values.join(","))}"</formula1></dataValidation>`,
+        )
         .join("")}</dataValidations>`
     : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -196,7 +202,9 @@ export function buildXlsx(sheets: SheetSpec[]): Uint8Array {
         .map(
           (s, i) =>
             `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
-            (s.images?.length ? `<Override PartName="/xl/drawings/drawing${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : ""),
+            (s.images?.length
+              ? `<Override PartName="/xl/drawings/drawing${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`
+              : ""),
         )
         .join("")}</Types>`,
     ),
@@ -213,8 +221,13 @@ export function buildXlsx(sheets: SheetSpec[]): Uint8Array {
     "xl/_rels/workbook.xml.rels": strToU8(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets
-        .map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`)
-        .join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+        .map(
+          (_, i) =>
+            `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+        )
+        .join(
+          "",
+        )}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
     ),
     "xl/styles.xml": strToU8(stylesXml()),
   };
@@ -222,7 +235,15 @@ export function buildXlsx(sheets: SheetSpec[]): Uint8Array {
   sheets.forEach((s, i) => {
     files[`xl/worksheets/sheet${i + 1}.xml`] = strToU8(sheetXml(s));
     if (!s.images?.length) return;
-    files[`xl/worksheets/_rels/sheet${i + 1}.xml.rels`] = strToU8(rels([{ id: "rId1", type: "drawing", target: `../drawings/drawing${i + 1}.xml` }]));
+    files[`xl/worksheets/_rels/sheet${i + 1}.xml.rels`] = strToU8(
+      rels([
+        {
+          id: "rId1",
+          type: "drawing",
+          target: `../drawings/drawing${i + 1}.xml`,
+        },
+      ]),
+    );
     files[`xl/drawings/drawing${i + 1}.xml`] = strToU8(drawingXml(s.images));
     const targets = s.images.map((im) => {
       media++;
@@ -230,9 +251,17 @@ export function buildXlsx(sheets: SheetSpec[]): Uint8Array {
       files[`xl/media/${name}`] = im.data;
       return name;
     });
-    files[`xl/drawings/_rels/drawing${i + 1}.xml.rels`] = strToU8(rels(targets.map((t, k) => ({ id: `rId${k + 1}`, type: "image", target: `../media/${t}` }))));
+    files[`xl/drawings/_rels/drawing${i + 1}.xml.rels`] = strToU8(
+      rels(
+        targets.map((t, k) => ({
+          id: `rId${k + 1}`,
+          type: "image",
+          target: `../media/${t}`,
+        })),
+      ),
+    );
   });
-  return zipSync(files, { level: 6 });
+  return zipSync(files, { level: 1 });
 }
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -244,7 +273,11 @@ export function toBase64(bytes: Uint8Array): string {
     const a = bytes[i];
     const b = bytes[i + 1];
     const c = bytes[i + 2];
-    out += B64[a >> 2] + B64[((a & 3) << 4) | ((b ?? 0) >> 4)] + (b === undefined ? "=" : B64[((b & 15) << 2) | ((c ?? 0) >> 6)]) + (c === undefined ? "=" : B64[c & 63]);
+    out +=
+      B64[a >> 2] +
+      B64[((a & 3) << 4) | ((b ?? 0) >> 4)] +
+      (b === undefined ? "=" : B64[((b & 15) << 2) | ((c ?? 0) >> 6)]) +
+      (c === undefined ? "=" : B64[c & 63]);
   }
   return out;
 }
@@ -255,7 +288,11 @@ export function fromBase64(b64: string): Uint8Array {
   const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
   let o = 0;
   for (let i = 0; i + 1 < clean.length; i += 4) {
-    const n = (B64.indexOf(clean[i]) << 18) | (B64.indexOf(clean[i + 1]) << 12) | ((i + 2 < clean.length ? B64.indexOf(clean[i + 2]) : 0) << 6) | (i + 3 < clean.length ? B64.indexOf(clean[i + 3]) : 0);
+    const n =
+      (B64.indexOf(clean[i]) << 18) |
+      (B64.indexOf(clean[i + 1]) << 12) |
+      ((i + 2 < clean.length ? B64.indexOf(clean[i + 2]) : 0) << 6) |
+      (i + 3 < clean.length ? B64.indexOf(clean[i + 3]) : 0);
     out[o++] = (n >> 16) & 255;
     if (i + 2 < clean.length) out[o++] = (n >> 8) & 255;
     if (i + 3 < clean.length) out[o++] = n & 255;

@@ -18,7 +18,12 @@ import { type FamilySnapshot, nowIso, type Person, type Union } from "./model";
 import { openRepo } from "./open-repo";
 import { META, type Repo } from "./repo";
 
-const EMPTY: FamilySnapshot = { persons: [], unions: [], links: [], familyName: "" };
+const EMPTY: FamilySnapshot = {
+  persons: [],
+  unions: [],
+  links: [],
+  familyName: "",
+};
 
 interface Store {
   ready: boolean;
@@ -63,7 +68,15 @@ interface Store {
   backupText: (opts?: { photos?: boolean; hideLiving?: boolean }) => Promise<string>;
   /** Restore from a Waris JSON backup or the old app's CSV files, replacing or merging */
   /** Restore from a Waris JSON backup, a Waris Excel file (+ photos named by ID) or the old app's CSV files */
-  restore: (files: RestoreFiles, mode?: "replace" | "merge") => Promise<{ total: number; added: number; updated: number; photos: number }>;
+  restore: (
+    files: RestoreFiles,
+    mode?: "replace" | "merge",
+  ) => Promise<{
+    total: number;
+    added: number;
+    updated: number;
+    photos: number;
+  }>;
   /** Make two records of the same person into one */
   joinPersons: (keepId: string, dropId: string) => Promise<void>;
   notDuplicates: Set<string>;
@@ -93,9 +106,14 @@ async function applyLegacyPhotos(s: FamilySnapshot, photos: Record<string, strin
 }
 
 /** Reads picked Restore files: an Excel file if there is one, otherwise backup JSON or old CSV files. */
-function parseRestore(files: RestoreFiles): { parsed: ParsedBackup; photos: number } {
+function parseRestore(files: RestoreFiles): {
+  parsed: ParsedBackup;
+  photos: number;
+} {
   if (files.excel) {
-    const r = excelToBackup(readXlsx(fromBase64(files.excel)), { images: files.images });
+    const r = excelToBackup(readXlsx(fromBase64(files.excel)), {
+      images: files.images,
+    });
     return { parsed: r.parsed, photos: r.photos };
   }
   const parsed = parseBackupFiles(files.texts);
@@ -139,7 +157,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const t = useCallback((key: TKey, vars?: Record<string, string | number>) => translate(lang, key, vars), [lang]);
   const graph = useMemo(() => new FamilyGraph(snapshot), [snapshot]);
 
-  const [backupInfo, setBackupInfo] = useState<{ changes: number; last?: string; snooze?: string }>({ changes: 0 });
+  const [backupInfo, setBackupInfo] = useState<{
+    changes: number;
+    last?: string;
+    snooze?: string;
+  }>({ changes: 0 });
 
   // Every edit ends with a reload, so this is where changes since the last backup are counted
   const reload = useCallback(async () => {
@@ -168,10 +190,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           up: num(await repo.getMeta(META.treeUp), DEFAULT_OPTIONS.up, 6),
           down: num(await repo.getMeta(META.treeDown), DEFAULT_OPTIONS.down, 4),
           showAdd: (await repo.getMeta(META.treeAdd)) !== "0",
+          classic: (await repo.getMeta(META.treeStyle)) === "classic",
         };
         // The last launch stopped while drawing the tree (crash): start with the default view
         if ((await repo.getMeta(META.treeDrawing)) === "1") {
-          opts = DEFAULT_OPTIONS;
+          // ...in the classic drawing, which has been safe on every phone so far
+          opts = { ...DEFAULT_OPTIONS, classic: true };
+          await repo.setMeta(META.treeStyle, "classic");
           await repo.setMeta(META.treeUp, String(opts.up));
           await repo.setMeta(META.treeDown, String(opts.down));
           await repo.setMeta(META.treeAdd, "1");
@@ -230,6 +255,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           repo().setMeta(META.treeUp, String(o.up));
           repo().setMeta(META.treeDown, String(o.down));
           repo().setMeta(META.treeAdd, o.showAdd ? "1" : "0");
+          repo().setMeta(META.treeStyle, o.classic ? "classic" : "game");
         });
     },
     treeDrawn: () => {
@@ -240,7 +266,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     homeId: snapshot.homePersonId,
     notice,
     clearNotice: () => setNotice(undefined),
-    backupDue: shouldRemindBackup({ people: snapshot.persons.length, changes: backupInfo.changes, lastBackup: backupInfo.last, snoozeUntil: backupInfo.snooze, now: new Date() }),
+    backupDue: shouldRemindBackup({
+      people: snapshot.persons.length,
+      changes: backupInfo.changes,
+      lastBackup: backupInfo.last,
+      snoozeUntil: backupInfo.snooze,
+      now: new Date(),
+    }),
     changesSinceBackup: backupInfo.changes,
     markBackedUp: () => {
       const last = new Date().toISOString();
@@ -291,11 +323,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     linkParents: async (childId, fatherId, motherId) => {
       // Re-read so a person saved a moment ago is included
-      for (const [role, id] of [["father", fatherId], ["mother", motherId]] as const) {
+      for (const [role, id] of [
+        ["father", fatherId],
+        ["mother", motherId],
+      ] as const) {
         if (!id) continue;
         const g = new FamilyGraph(await repo().load());
         if (g.parentLinksOf(childId).some((l) => l.parentId === id)) continue;
-        await addRelativeAction(repo(), g, { role, of: childId, person: { id } });
+        await addRelativeAction(repo(), g, {
+          role,
+          of: childId,
+          person: { id },
+        });
       }
       await reload();
     },
@@ -334,7 +373,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           if (b64) photos[p.photo] = b64;
         }
       }
-      return JSON.stringify(buildBackup(data, photos, { photosIncluded: withPhotos, livingHidden: !!opts.hideLiving }));
+      return JSON.stringify(
+        buildBackup(data, photos, {
+          photosIncluded: withPhotos,
+          livingHidden: !!opts.hideLiving,
+        }),
+      );
     },
     peekBackup: (files) => parseRestore(files).parsed.data.persons.length,
     restore: async (files, mode = "replace") => {
@@ -354,7 +398,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // the home person and family name when the file doesn't set them (e.g. Excel)
         const mine = new Map(snapshot.persons.map((p) => [p.id, p]));
         for (const p of data.persons) if (!p.photo && mine.get(p.id)?.photo) p.photo = mine.get(p.id)!.photo;
-        if (!data.homePersonId && snapshot.homePersonId && mine.has(snapshot.homePersonId) && data.persons.some((p) => p.id === snapshot.homePersonId)) data.homePersonId = snapshot.homePersonId;
+        if (!data.homePersonId && snapshot.homePersonId && mine.has(snapshot.homePersonId) && data.persons.some((p) => p.id === snapshot.homePersonId))
+          data.homePersonId = snapshot.homePersonId;
         if (!data.familyName) data.familyName = snapshot.familyName;
       }
       // Photos: write the ones the file carries; keep ones already on this phone; drop the rest
@@ -396,10 +441,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         for (const p of snapshot.persons) {
           if (!p.photo) continue;
           const th = await photoThumbnail(p.photo);
-          if (th) photos[p.id] = { data: fromBase64(th.base64), ext: "jpeg", width: th.width, height: th.height };
+          if (th)
+            photos[p.id] = {
+              data: fromBase64(th.base64),
+              ext: "jpeg",
+              width: th.width,
+              height: th.height,
+            };
         }
       }
-      const sheets = buildFamilyWorkbook(graph, { lang, t, homeId: snapshot.homePersonId, customTerms, familyName: snapshot.familyName, today, photos });
+      const sheets = buildFamilyWorkbook(graph, {
+        lang,
+        t,
+        homeId: snapshot.homePersonId,
+        customTerms,
+        familyName: snapshot.familyName,
+        today,
+        photos,
+      });
       return toBase64(buildXlsx(sheets));
     },
   };

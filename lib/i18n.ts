@@ -119,9 +119,11 @@ const en = {
   generationsUp: "Generations up",
   generationsDown: "Generations down",
   showPlaceholders: "Show “Add” boxes",
+  classicTree: "Classic tree (simpler drawing)",
+  fullProfile: "Open full profile",
   center: "Centre",
   goHome: "Home person",
-  tapHint: "Tap a person to move the tree. Tap the centre person to open their profile.",
+  tapHint: "Tap a person to move the tree. Tap the centre person to open their profile. Tap − under a family to fold it away, +N to open it again.",
 
   familyName: "Family name",
   familyNameHint: "e.g. Keluarga Mohammad",
@@ -133,8 +135,10 @@ const en = {
   restoreQ: "Replace the whole tree with this backup ({n} people)? Your current data will be overwritten.",
   restored: "Restored {n} people.",
   backupSaved: "Backup saved.",
-  backupFailed: "Could not read that file. Choose a Waris backup (.json), a Waris Excel file (.xlsx), or the old app's CSV files (members.csv, marriages.csv, parent-child.csv) together.",
-  restoreDesc: "Choose a .json backup or a Waris Excel file (.xlsx) — photos named by ID (P0012.jpg) can be picked with it. Or select all 3 CSV files from the old app at once. Old CSV backups do not contain photos.",
+  backupFailed:
+    "Could not read that file. Choose a Waris backup (.json), a Waris Excel file (.xlsx), or the old app's CSV files (members.csv, marriages.csv, parent-child.csv) together.",
+  restoreDesc:
+    "Choose a .json backup or a Waris Excel file (.xlsx) — photos named by ID (P0012.jpg) can be picked with it. Or select all 3 CSV files from the old app at once. Old CSV backups do not contain photos.",
   exportGedcom: "Export GEDCOM (.ged)",
   gedcomDesc: "Standard family tree file for FamilySearch, MyHeritage, Ancestry, Gramps.",
   gedcomLiving: "Include living people's details?",
@@ -151,7 +155,7 @@ const en = {
   binti: "binti",
   linkedTo: "Linked to {name}",
   unlink: "Unlink",
-  nameOnly: "Use \"{name}\" as name only (not linked)",
+  nameOnly: 'Use "{name}" as name only (not linked)',
   fatherSuggest: "Is this the father? Tap to link",
   motherOf: "Mother (wife of {name})",
   linkedFather: "Father in tree: {name}",
@@ -222,7 +226,8 @@ const en = {
   printedOn: "Printed {date} · Waris",
   peopleCount: "{n} people",
   gensCount: "{n} generations",
-  treeReset: "The tree could not be shown last time, so the tree view was reset to 3 generations up and 2 down. Your family data is safe.",
+  treeReset:
+    "The tree could not be shown last time, so the tree view was reset to 3 generations up and 2 down, in the classic drawing. Your family data is safe.",
   treeError: "The tree could not be shown with these settings. Your family data is safe.",
   resetView: "Reset tree view",
   excelNoPhotos: "Without photos",
@@ -256,7 +261,8 @@ const en = {
   duplicatesShort: "Find people entered twice and join them",
   preparingFile: "Preparing the file…",
   exportExcel: "Export to Excel (whole list)",
-  exportExcelDesc: "Everyone in one Excel file: family outline by generation, people, marriages, parents and children, with totals. Opens in Excel, Google Sheets or WPS.",
+  exportExcelDesc:
+    "Everyone in one Excel file: family outline by generation, people, marriages, parents and children, with totals. Opens in Excel, Google Sheets or WPS.",
 };
 
 export type TKey = keyof typeof en;
@@ -380,9 +386,12 @@ const bm: Record<TKey, string> = {
   generationsUp: "Generasi ke atas",
   generationsDown: "Generasi ke bawah",
   showPlaceholders: "Tunjuk kotak “Tambah”",
+  classicTree: "Salasilah klasik (lukisan ringkas)",
+  fullProfile: "Buka profil penuh",
   center: "Tengahkan",
   goHome: "Orang utama",
-  tapHint: "Ketik seseorang untuk alihkan salasilah. Ketik orang di tengah untuk buka profil.",
+  tapHint:
+    "Ketik seseorang untuk alihkan salasilah. Ketik orang di tengah untuk buka profil. Ketik − di bawah sesebuah keluarga untuk lipat, +N untuk buka semula.",
 
   familyName: "Nama keluarga",
   familyNameHint: "cth. Keluarga Mohammad",
@@ -394,8 +403,10 @@ const bm: Record<TKey, string> = {
   restoreQ: "Gantikan seluruh salasilah dengan sandaran ini ({n} orang)? Data semasa akan ditulis ganti.",
   restored: "{n} orang dipulihkan.",
   backupSaved: "Sandaran disimpan.",
-  backupFailed: "Fail tidak dapat dibaca. Pilih fail sandaran Waris (.json), fail Excel Waris (.xlsx), atau ketiga-tiga fail CSV aplikasi lama (members.csv, marriages.csv, parent-child.csv) serentak.",
-  restoreDesc: "Pilih fail sandaran .json atau fail Excel Waris (.xlsx) — gambar bernama ID (P0012.jpg) boleh dipilih bersama. Atau pilih ketiga-tiga fail CSV dari aplikasi lama serentak. Sandaran CSV lama tidak mengandungi gambar.",
+  backupFailed:
+    "Fail tidak dapat dibaca. Pilih fail sandaran Waris (.json), fail Excel Waris (.xlsx), atau ketiga-tiga fail CSV aplikasi lama (members.csv, marriages.csv, parent-child.csv) serentak.",
+  restoreDesc:
+    "Pilih fail sandaran .json atau fail Excel Waris (.xlsx) — gambar bernama ID (P0012.jpg) boleh dipilih bersama. Atau pilih ketiga-tiga fail CSV dari aplikasi lama serentak. Sandaran CSV lama tidak mengandungi gambar.",
   exportGedcom: "Eksport GEDCOM (.ged)",
   gedcomDesc: "Format salasilah piawai untuk FamilySearch, MyHeritage, Ancestry, Gramps.",
   gedcomLiving: "Sertakan butiran orang yang masih hidup?",
@@ -412,7 +423,7 @@ const bm: Record<TKey, string> = {
   binti: "binti",
   linkedTo: "Dipautkan kepada {name}",
   unlink: "Buang pautan",
-  nameOnly: "Guna \"{name}\" sebagai nama sahaja (tidak dipautkan)",
+  nameOnly: 'Guna "{name}" sebagai nama sahaja (tidak dipautkan)',
   fatherSuggest: "Inikah bapanya? Tekan untuk pautkan",
   motherOf: "Ibu (isteri {name})",
   linkedFather: "Bapa dalam salasilah: {name}",
@@ -483,7 +494,8 @@ const bm: Record<TKey, string> = {
   printedOn: "Dicetak {date} · Waris",
   peopleCount: "{n} orang",
   gensCount: "{n} generasi",
-  treeReset: "Salasilah tidak dapat dipaparkan kali lepas, jadi paparan ditetapkan semula kepada 3 generasi ke atas dan 2 ke bawah. Data keluarga anda selamat.",
+  treeReset:
+    "Salasilah tidak dapat dipaparkan kali lepas, jadi paparan ditetapkan semula kepada 3 generasi ke atas dan 2 ke bawah, dengan lukisan klasik. Data keluarga anda selamat.",
   treeError: "Salasilah tidak dapat dipaparkan dengan tetapan ini. Data keluarga anda selamat.",
   resetView: "Tetapkan semula paparan",
   excelNoPhotos: "Tanpa gambar",
@@ -517,7 +529,8 @@ const bm: Record<TKey, string> = {
   duplicatesShort: "Cari orang yang dimasukkan dua kali dan cantumkan",
   preparingFile: "Menyediakan fail…",
   exportExcel: "Eksport ke Excel (senarai penuh)",
-  exportExcelDesc: "Semua ahli dalam satu fail Excel: susur galur ikut generasi, ahli, perkahwinan, ibu bapa dan anak, dengan jumlah. Boleh dibuka di Excel, Google Sheets atau WPS.",
+  exportExcelDesc:
+    "Semua ahli dalam satu fail Excel: susur galur ikut generasi, ahli, perkahwinan, ibu bapa dan anak, dengan jumlah. Boleh dibuka di Excel, Google Sheets atau WPS.",
 };
 
 const DICTS: Record<Lang, Record<TKey, string>> = { en, bm };
