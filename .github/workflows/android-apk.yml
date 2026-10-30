@@ -1,0 +1,121 @@
+name: Build Android APK
+
+# Builds a signed APK and publishes it on the repo's Releases page:
+#   https://github.com/mirhayuzi/waris-geneology-v2/releases/latest
+# Runs on every push to main (and the rewrite branch) that changes app files,
+# or by hand from the Actions tab (Run workflow / Re-run jobs).
+
+on:
+  push:
+    branches: [main, "rewrite/**"]
+    paths-ignore: ["**.md"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_NO_TELEMETRY: 1
+      # Each build gets a higher version code so Android accepts it as an update
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check signing password
+        env:
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$PW" ]; then
+            echo "::error::Add the repository secret ANDROID_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions), then re-run this workflow."
+            exit 1
+          fi
+          # Ignore spaces or line breaks pasted around the password
+          PW=$(printf '%s' "$PW" | tr -d '[:space:]')
+          echo "::add-mask::$PW"
+          if ! keytool -list -keystore signing/waris-release.p12 -storetype PKCS12 -storepass "$PW" > /dev/null 2>&1; then
+            echo "::error::The ANDROID_KEYSTORE_PASSWORD secret does not match signing/waris-release.p12. Update the secret (copy it exactly) and re-run."
+            exit 1
+          fi
+          echo "KEY_PW=$PW" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Build release APK
+        run: |
+          PW="$KEY_PW"
+          cd android
+          set +e
+          ./gradlew assembleRelease --no-daemon --stacktrace \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/signing/waris-release.p12" \
+            -Pandroid.injected.signing.store.password="$PW" \
+            -Pandroid.injected.signing.key.alias=waris \
+            -Pandroid.injected.signing.key.password="$PW" 2>&1 | tee ../gradle.log
+          CODE=${PIPESTATUS[0]}
+          set -e
+          if [ "$CODE" != "0" ]; then
+            # Show the cause as an annotation, so it can be read without opening the full log
+            python3 - <<'PY'
+          import re
+          log = open("../gradle.log", errors="replace").read()
+          parts = []
+          m = re.search(r"\* What went wrong:\n(.*?)(?:\n\* Try:|\Z)", log, re.S)
+          if m:
+              parts.append("WHAT WENT WRONG:\n" + m.group(1).strip()[:3000])
+          errs = [l for l in log.splitlines() if re.search(r"(^e: |error:|ERROR|FAILED|Exception)", l)]
+          if errs:
+              parts.append("ERROR LINES:\n" + "\n".join(dict.fromkeys(errs))[:3000])
+          if not parts:
+              parts.append("LOG TAIL:\n" + "\n".join(log.splitlines()[-60:])[-3000:])
+          for p in parts:
+              print("::error title=Gradle build failed::" + p.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+          PY
+            exit "$CODE"
+          fi
+
+      - name: Check the APK is signed with the Waris key
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
+          grep -q "CN=Waris" certs.txt
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p out
+          cp "$APK" "out/waris-$VERSION-build$BUILD_NUMBER.apk"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Publish on the Releases page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$VERSION-build$BUILD_NUMBER"
+          gh release create "$TAG" out/*.apk \
+            --target "$GITHUB_SHA" \
+            --title "Waris $VERSION (build $BUILD_NUMBER)" \
+            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}. Download the .apk on your phone and open it to install." \
+            --latest
