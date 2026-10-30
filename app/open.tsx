@@ -3,14 +3,15 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import { useRestore } from "@/components/useRestore";
 import { Button, Icon, Muted, Screen } from "@/components/ui";
-import { readIncomingFile, type RestoreFiles } from "@/lib/files";
+import { readIncomingFile, type RestoreFiles, takeIncomingFile } from "@/lib/files";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
 
 /** A family file opened with Waris from WhatsApp, Files or email: Merge or Replace. */
 export default function OpenFileScreen() {
   const c = useColors();
-  const { uri } = useLocalSearchParams<{ uri?: string }>();
+  // A new link each time a file is opened (t changes), kept outside the page address
+  const { t: openedAt } = useLocalSearchParams<{ t?: string }>();
   const { t, graph } = useStore();
   const [files, setFiles] = useState<RestoreFiles | null>(null);
   const [count, setCount] = useState<number | null>(null);
@@ -30,7 +31,10 @@ export default function OpenFileScreen() {
   const flow = useRestore(run);
 
   useEffect(() => {
+    const uri = takeIncomingFile();
     if (!uri) return setFailed(true);
+    setFailed(false);
+    setFiles(null);
     (async () => {
       try {
         const f = await readIncomingFile(uri);
@@ -43,7 +47,7 @@ export default function OpenFileScreen() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri]);
+  }, [openedAt]);
 
   return (
     <Screen title={t("openFile")} back>

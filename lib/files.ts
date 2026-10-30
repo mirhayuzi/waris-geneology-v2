@@ -239,13 +239,34 @@ export async function cropSquare(p: PreparedPhoto, r: { x: number; y: number; si
 }
 
 /**
- * A file opened with Waris from another app (WhatsApp, Files, Gmail): a Waris Excel
- * file (zip) or a JSON backup. Reads content:// and file:// links.
+ * A file opened with Waris from another app (WhatsApp, Telegram, Files, Gmail): a Waris
+ * Excel file (zip) or a JSON backup. Those apps hand over content:// links that can only
+ * be copied, not read as text directly, so the file is copied into the cache first.
  */
 export async function readIncomingFile(uri: string): Promise<RestoreFiles> {
-  const b64 = await readBase64(uri);
-  // .xlsx is a zip: it starts with "PK\x03\x04", which is "UEsD" in base64
-  if (b64.startsWith("UEsD")) return { texts: [], excel: b64, images: [] };
-  const text = Platform.OS === "web" ? await (await fetch(uri)).text() : await FileSystem.readAsStringAsync(uri);
-  return { texts: [text], images: [] };
+  if (Platform.OS === "web") {
+    const b64 = await readBase64(uri);
+    return b64.startsWith("UEsD") ? { texts: [], excel: b64, images: [] } : { texts: [await (await fetch(uri)).text()], images: [] };
+  }
+  const local = `${FileSystem.cacheDirectory}incoming-${Date.now().toString(36)}`;
+  await FileSystem.copyAsync({ from: uri, to: local });
+  try {
+    const b64 = await FileSystem.readAsStringAsync(local, { encoding: FileSystem.EncodingType.Base64 });
+    // .xlsx is a zip: it starts with "PK\x03\x04", which is "UEsD" in base64
+    if (b64.startsWith("UEsD")) return { texts: [], excel: b64, images: [] };
+    return { texts: [await FileSystem.readAsStringAsync(local)], images: [] };
+  } finally {
+    FileSystem.deleteAsync(local, { idempotent: true }).catch(() => {});
+  }
 }
+
+/** The last file link handed to Waris by another app (kept here, not in the page address). */
+let incoming: string | null = null;
+export const setIncomingFile = (uri: string) => {
+  incoming = uri;
+};
+export const takeIncomingFile = (): string | null => {
+  const u = incoming;
+  incoming = null;
+  return u;
+};
