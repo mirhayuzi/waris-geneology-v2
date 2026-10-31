@@ -44,6 +44,7 @@ const en = {
   bannerGens: "{n} generations",
   bannerPhotos: "{n} photos",
   familyOfNone: "Your family",
+  descendantsOf: "Descendants of {name}",
   welcomeTitle: "Start your family tree",
   welcomeBody: "Begin with yourself, then add your parents, spouse and children. Everything stays on this phone.",
 
@@ -338,6 +339,7 @@ const bm: Record<TKey, string> = {
   bannerGens: "{n} generasi",
   bannerPhotos: "{n} gambar",
   familyOfNone: "Keluarga anda",
+  descendantsOf: "Keturunan {name}",
   welcomeTitle: "Mula salasilah keluarga",
   welcomeBody: "Mula dengan diri anda, kemudian tambah ibu bapa, pasangan dan anak. Semua data kekal dalam telefon ini.",
 

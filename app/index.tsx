@@ -64,29 +64,14 @@ export default function TreeScreen() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout]);
-  // Family banner: name, people, generations, photos
+  // Banner: the centre person's line - them and everyone descended from them
   const stats = useMemo(() => {
-    const depth = new Map<string, number>();
-    const gen = (id: string, seen: Set<string>): number => {
-      const known = depth.get(id);
-      if (known) return known;
-      seen.add(id);
-      let d = 1;
-      for (const p of graph.parents(id)) if (!seen.has(p.id)) d = Math.max(d, gen(p.id, seen) + 1);
-      seen.delete(id);
-      depth.set(id, d);
-      return d;
-    };
-    let gens = 0;
-    let photos = 0;
-    for (const p of graph.persons.values()) {
-      gens = Math.max(gens, gen(p.id, new Set()));
-      if (p.photo) photos++;
-    }
-    return { people: graph.size, gens, photos };
-  }, [graph]);
+    if (!focusId || !graph.get(focusId)) return { people: 0, gens: 0, photos: 0 };
+    const gens = graph.descendantsByGeneration(focusId, { includeNonBirth: true });
+    const all = [graph.get(focusId)!, ...gens.flat()];
+    return { people: all.length, gens: gens.length + 1, photos: all.filter((p) => p.photo).length };
+  }, [graph, focusId]);
   const familyName = graph.snapshot.familyName || t("familyOfNone");
-  const crest = (familyName.split(/\s+/).find((w) => !/^(keluarga|family|hj|haji|hajah|hjh|dato'?|datuk|tun|tan|sri|the|of)$/i.test(w)) ?? familyName).charAt(0).toUpperCase();
   const { height: winH } = useWindowDimensions();
   // a phone turned sideways is short: keep the whole height for the tree
   const showBanner = winH >= 520;
@@ -107,8 +92,12 @@ export default function TreeScreen() {
   const focus = graph.get(focusId);
   const home = graph.get(homeId);
   // The title follows whoever the tree is centred on; the saved family name stays underneath
-  const title = focus ? t("familyOf", { name: fullName(focus) }) : graph.snapshot.familyName || t("tree");
-  const subtitle = focus && !showBanner ? graph.snapshot.familyName || undefined : undefined;
+  // With the banner showing "Keturunan <centre person>", the top bar carries the family name;
+  // without it (phone sideways), the top bar says whose line it is
+  const title = focus && !showBanner ? t("descendantsOf", { name: fullName(focus) }) : graph.snapshot.familyName || t("appName");
+  const subtitle = undefined;
+  const bannerTitle = focus ? t("descendantsOf", { name: fullName(focus) }) : familyName;
+  const crest = (focus?.givenName ?? familyName).trim().charAt(0).toUpperCase();
 
   const onPressCard = (card: Card) => {
     if (card.add) {
@@ -166,13 +155,13 @@ export default function TreeScreen() {
       bg={background.bg}
     >
       {showBanner ? (
-        <Pressable onPress={() => router.push("/settings")} accessibilityRole="button" accessibilityLabel={familyName} style={styles.banner}>
+        <Pressable onPress={() => focus && router.push(`/person/${focus.id}`)} accessibilityRole="button" accessibilityLabel={bannerTitle} style={styles.banner}>
           <View style={styles.crest}>
             <Text style={styles.crestText}>{crest}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-            <Text style={styles.bannerTitle} numberOfLines={1}>
-              {familyName}
+            <Text style={styles.bannerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {bannerTitle}
             </Text>
             <View style={styles.chips}>
               <Text style={[styles.chip, styles.chipGold]}>{t("bannerPeople", { n: stats.people })}</Text>

@@ -3,6 +3,19 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.4.1",
+    notes: {
+      en: [
+        "The banner now shows whose line you are looking at: \"Descendants of …\", with their people, generations and photos",
+        "Every pop-up has a ✕ to close it, and tapping beside it closes it too (easier when the phone is sideways)",
+      ],
+      bm: [
+        "Sepanduk kini menunjukkan keturunan siapa yang anda lihat: \"Keturunan …\", dengan bilangan orang, generasi dan gambar",
+        "Setiap tetingkap timbul ada ✕ untuk tutup, dan ketik di sebelahnya juga menutupnya (lebih mudah ketika telefon mengiring)",
+      ],
+    },
+  },
+  {
     version: "2.4.0",
     notes: {
       en: [
