@@ -1,4 +1,7 @@
-import { Stack } from "expo-router";
+import { router, Stack, useRootNavigationState } from "expo-router";
+import { ShareIntentProvider, useShareIntentContext } from "expo-share-intent";
+import { useEffect } from "react";
+import { setIncomingFile } from "@/lib/files";
 import { StatusBar } from "expo-status-bar";
 // Only the five weights the app uses (importing the whole family adds every style to the APK)
 import { PlusJakartaSans_400Regular } from "@expo-google-fonts/plus-jakarta-sans/400Regular";
@@ -14,6 +17,25 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StoreProvider, useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
+
+/**
+ * "Share → Waris" from WhatsApp, Telegram, Files ...: the shared family file goes to the
+ * same Open screen as "Open with Waris". Shared text and links are ignored.
+ */
+function ShareListener() {
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
+  const navReady = !!useRootNavigationState()?.key;
+  useEffect(() => {
+    if (!hasShareIntent || !navReady) return;
+    const file = shareIntent.files?.[0];
+    if (file?.path) {
+      setIncomingFile(file.path);
+      router.push(`/open?t=${Date.now()}`);
+    }
+    resetShareIntent();
+  }, [hasShareIntent, shareIntent, resetShareIntent, navReady]);
+  return null;
+}
 
 function Gate() {
   const { ready, error } = useStore();
@@ -34,20 +56,24 @@ function Gate() {
     );
   }
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="people" />
-      <Stack.Screen name="person/[id]" />
-      <Stack.Screen name="edit" options={{ presentation: "modal" }} />
-      <Stack.Screen name="union" options={{ presentation: "modal" }} />
-      <Stack.Screen name="relate" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="unlinked" />
-      <Stack.Screen name="duplicates" />
-      <Stack.Screen name="print" />
-      <Stack.Screen name="open" />
-      <Stack.Screen name="about" />
-    </Stack>
+    <>
+      <ShareListener />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="people" />
+        <Stack.Screen name="person/[id]" />
+        <Stack.Screen name="edit" options={{ presentation: "modal" }} />
+        <Stack.Screen name="union" options={{ presentation: "modal" }} />
+        <Stack.Screen name="relate" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="unlinked" />
+        <Stack.Screen name="duplicates" />
+        <Stack.Screen name="print" />
+        <Stack.Screen name="open" />
+        <Stack.Screen name="about" />
+      <Stack.Screen name="chart" />
+      </Stack>
+    </>
   );
 }
 
@@ -57,7 +83,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StoreProvider>
-          <Gate />
+          <ShareIntentProvider>
+            <Gate />
+          </ShareIntentProvider>
           <StatusBar style="auto" />
         </StoreProvider>
       </SafeAreaProvider>

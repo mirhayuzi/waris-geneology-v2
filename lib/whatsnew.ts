@@ -3,6 +3,21 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.5.0",
+    notes: {
+      en: [
+        "Share → Waris: send a family file from WhatsApp, Telegram or Files straight into Waris",
+        "Family tree chart: a printable certificate (Sijil Salasilah) as a PDF, A4 or A3, with photos",
+        "Ready for Google Play: Waris now has its permanent app ID",
+      ],
+      bm: [
+        "Kongsi → Waris: hantar fail keluarga dari WhatsApp, Telegram atau Fail terus ke Waris",
+        "Carta salasilah: sijil yang boleh dicetak (Sijil Salasilah) sebagai PDF, A4 atau A3, dengan gambar",
+        "Sedia untuk Google Play: Waris kini mempunyai ID aplikasi yang tetap",
+      ],
+    },
+  },
+  {
     version: "2.4.1",
     notes: {
       en: [

@@ -127,6 +127,7 @@ export default function SettingsScreen() {
             left={<Icon name="people-alt" color={c.primary} />}
             onPress={() => router.push("/duplicates")}
           />
+          <Row title={t("chartTitle")} subtitle={t("chartDesc")} left={<Icon name="workspace-premium" color={c.primary} />} onPress={() => router.push("/chart")} />
           <Row title={t("printList")} subtitle={t("printDesc")} left={<Icon name="print" color={c.primary} />} onPress={() => router.push("/print")} last />
         </Section>
 

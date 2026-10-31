@@ -1,8 +1,10 @@
 import type { ExpoConfig } from "expo/config";
 
-// Keep this package id unchanged: Android only updates the installed app (and keeps
-// its data for the one-time migration to SQLite) when the id stays the same.
-const APP_ID = "space.manus.waris.genealogy.t20260312144942";
+// The app's permanent ID on Google Play (chosen for 2.5.0). Never change it again: Android
+// treats an app with another ID as a different app, with its own empty data.
+// (Before 2.5.0 the ID was "space.manus.waris.genealogy.t20260312144942"; family data
+// moves over with Backup in the old app, then Restore in this one.)
+const APP_ID = "com.waris.salasilah";
 
 // GitHub builds pass their run number, so every new APK installs as an update
 const VERSION_CODE = 100 + (Number(process.env.BUILD_NUMBER) || 0);
@@ -10,7 +12,7 @@ const VERSION_CODE = 100 + (Number(process.env.BUILD_NUMBER) || 0);
 const config: ExpoConfig = {
   name: "Waris",
   slug: "waris-genealogy",
-  version: "2.4.1",
+  version: "2.5.0",
   // Tablets may rotate; phones are locked to portrait at start-up (app/_layout.tsx)
   orientation: "default",
   icon: "./assets/images/icon.png",
@@ -75,6 +77,14 @@ const config: ExpoConfig = {
         photosPermission: "Allow Waris to use your photos for family member pictures",
         cameraPermission: "Allow Waris to take family member pictures",
         microphonePermission: false,
+      },
+    ],
+    // "Share → Waris" for family files (backup .json, Excel .xlsx)
+    [
+      "expo-share-intent",
+      {
+        androidIntentFilters: ["application/json", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream", "text/json"],
+        disableIOS: true,
       },
     ],
     [

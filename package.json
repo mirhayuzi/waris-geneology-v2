@@ -1,6 +1,6 @@
 {
   "name": "waris",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -32,6 +32,7 @@
     "expo-print": "~15.0.8",
     "expo-router": "~6.0.23",
     "expo-screen-orientation": "~9.0.8",
+    "expo-share-intent": "5.1.1",
     "expo-sharing": "~14.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-sqlite": "~16.0.10",

@@ -66,13 +66,14 @@ jobs:
       - name: Generate the Android project
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Build release APK
+      - name: Build release APK and Play bundle
         run: |
           PW="$KEY_PW"
           cd android
           set +e
           # Real phones and tablets only (ARM); leaving out emulator CPUs keeps the APK smaller
-          ./gradlew assembleRelease --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+          # .apk to install directly; .aab to upload to Google Play (same upload key)
+          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/signing/waris-release.p12" \
             -Pandroid.injected.signing.store.password="$PW" \
             -Pandroid.injected.signing.key.alias=waris \
@@ -108,6 +109,9 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           mkdir -p out
           cp "$APK" "out/waris-$VERSION-build$BUILD_NUMBER.apk"
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          jarsigner -verify -verbose -certs "$AAB" | grep -q "CN=Waris"
+          cp "$AAB" "out/waris-$VERSION-build$BUILD_NUMBER.aab"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Publish on the Releases page
@@ -115,8 +119,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v$VERSION-build$BUILD_NUMBER"
-          gh release create "$TAG" out/*.apk \
+          gh release create "$TAG" out/*.apk out/*.aab \
             --target "$GITHUB_SHA" \
             --title "Waris $VERSION (build $BUILD_NUMBER)" \
-            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}. Download the .apk on your phone and open it to install." \
+            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}. Phones: download the .apk and open it to install. Google Play: upload the .aab in Play Console." \
             --latest

@@ -320,6 +320,16 @@ export default function TreeScreen() {
           <LifeBadge living={false} size={16} inline />
           <Muted>{t("deceased")}</Muted>
         </View>
+        <Button
+          title={t("printChart")}
+          icon="workspace-premium"
+          kind="secondary"
+          onPress={() => {
+            setOptsOpen(false);
+            router.push("/chart");
+          }}
+          style={{ marginTop: 12 }}
+        />
         <Muted style={{ marginTop: 12 }}>{t("tapHint")}</Muted>
       </Sheet>
       <Sheet visible={!!release && newsOpen} onClose={closeNews} title={t("whatsNewIn", { v: current })}>
