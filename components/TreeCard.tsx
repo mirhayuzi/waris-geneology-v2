@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "@/components/Text";
 // Gesture-handler's Pressable is cancelled when the canvas starts panning, so a drag never counts as a tap
 import { Pressable } from "react-native-gesture-handler";
 import { yearOf } from "@/lib/dates";

@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { lifespan } from "@/components/TreeCard";
 import { Icon, Muted, Screen } from "@/components/ui";

@@ -48,6 +48,11 @@ interface Store {
   changesSinceBackup: number;
   markBackedUp: () => void;
   snoozeBackup: () => void;
+  /** Welcome screens seen, and the version whose "What's new" was last shown */
+  onboarded: boolean;
+  seenVersion?: string;
+  markOnboarded: () => void;
+  markVersionSeen: (v: string) => void;
 
   savePerson: (p: Person) => Promise<void>;
   setPhoto: (p: Person, source: { uri: string; mime?: string | null } | null) => Promise<Person>;
@@ -162,6 +167,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     last?: string;
     snooze?: string;
   }>({ changes: 0 });
+  const [flags, setFlags] = useState<{ onboarded: boolean; seenVersion?: string }>({ onboarded: false });
 
   // Every edit ends with a reload, so this is where changes since the last backup are counted
   const reload = useCallback(async () => {
@@ -210,6 +216,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           snooze: await repo.getMeta(META.backupSnooze),
         });
         setTreeOptionsState(opts);
+        setFlags({ onboarded: (await repo.getMeta(META.onboarded)) === "1", seenVersion: await repo.getMeta(META.seenVersion) });
         try {
           setCustomTerms(JSON.parse((await repo.getMeta(META.customTerms)) ?? "{}"));
           setNotDuplicates(new Set(JSON.parse((await repo.getMeta(META.notDuplicates)) ?? "[]") as string[]));
@@ -282,6 +289,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       repo().setMeta(META.lastBackup, last);
       repo().setMeta(META.changesSinceBackup, "0");
       repo().setMeta(META.backupSnooze, undefined);
+    },
+    onboarded: flags.onboarded,
+    seenVersion: flags.seenVersion,
+    markOnboarded: () => {
+      setFlags((f) => ({ ...f, onboarded: true }));
+      repo().setMeta(META.onboarded, "1");
+    },
+    markVersionSeen: (v) => {
+      setFlags((f) => ({ ...f, seenVersion: v }));
+      repo().setMeta(META.seenVersion, v);
     },
     snoozeBackup: () => {
       const snooze = new Date(Date.now() + SNOOZE_DAYS * 86400000).toISOString();

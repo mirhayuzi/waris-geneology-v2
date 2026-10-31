@@ -1,7 +1,11 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, useWindowDimensions, View } from "react-native";
+import { Text } from "@/components/Text";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Welcome } from "@/components/Welcome";
+import { appVersion } from "@/lib/version";
+import { releaseToShow } from "@/lib/whatsnew";
 import { SkiaTree } from "@/components/SkiaTree";
 import { BACKGROUND_IDS, backgroundOf, isBackgroundId, useTreeBackground } from "@/lib/backgrounds";
 import { Sheet, SheetItem } from "@/components/Sheet";
@@ -60,11 +64,51 @@ export default function TreeScreen() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout]);
+  // Family banner: name, people, generations, photos
+  const stats = useMemo(() => {
+    const depth = new Map<string, number>();
+    const gen = (id: string, seen: Set<string>): number => {
+      const known = depth.get(id);
+      if (known) return known;
+      seen.add(id);
+      let d = 1;
+      for (const p of graph.parents(id)) if (!seen.has(p.id)) d = Math.max(d, gen(p.id, seen) + 1);
+      seen.delete(id);
+      depth.set(id, d);
+      return d;
+    };
+    let gens = 0;
+    let photos = 0;
+    for (const p of graph.persons.values()) {
+      gens = Math.max(gens, gen(p.id, new Set()));
+      if (p.photo) photos++;
+    }
+    return { people: graph.size, gens, photos };
+  }, [graph]);
+  const familyName = graph.snapshot.familyName || t("familyOfNone");
+  const crest = (familyName.split(/\s+/).find((w) => !/^(keluarga|family|hj|haji|hajah|hjh|dato'?|datuk|tun|tan|sri|the|of)$/i.test(w)) ?? familyName).charAt(0).toUpperCase();
+  const { height: winH } = useWindowDimensions();
+  // a phone turned sideways is short: keep the whole height for the tree
+  const showBanner = winH >= 520;
+
+  // Welcome screens (new users) and "What's new" (after an update), each shown once
+  const current = appVersion().version;
+  const release = store.ready ? releaseToShow(current, store.seenVersion, graph.size > 0) : undefined;
+  const [newsOpen, setNewsOpen] = useState(true);
+  useEffect(() => {
+    if (store.ready && !store.seenVersion && graph.size === 0) store.markVersionSeen(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.ready, store.seenVersion, graph.size]);
+  const closeNews = () => {
+    setNewsOpen(false);
+    store.markVersionSeen(current);
+  };
+
   const focus = graph.get(focusId);
   const home = graph.get(homeId);
   // The title follows whoever the tree is centred on; the saved family name stays underneath
   const title = focus ? t("familyOf", { name: fullName(focus) }) : graph.snapshot.familyName || t("tree");
-  const subtitle = focus ? graph.snapshot.familyName || undefined : undefined;
+  const subtitle = focus && !showBanner ? graph.snapshot.familyName || undefined : undefined;
 
   const onPressCard = (card: Card) => {
     if (card.add) {
@@ -103,6 +147,7 @@ export default function TreeScreen() {
           <Button title={t("addYourself")} icon="person-add" onPress={() => router.push("/edit")} />
           <Button title={t("restoreBackup")} kind="plain" onPress={() => router.push("/settings")} style={{ marginTop: 8 }} />
         </View>
+        <Welcome visible={!store.onboarded} onDone={store.markOnboarded} />
       </Screen>
     );
   }
@@ -120,6 +165,23 @@ export default function TreeScreen() {
       right={header}
       bg={background.bg}
     >
+      {showBanner ? (
+        <Pressable onPress={() => router.push("/settings")} accessibilityRole="button" accessibilityLabel={familyName} style={styles.banner}>
+          <View style={styles.crest}>
+            <Text style={styles.crestText}>{crest}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+            <Text style={styles.bannerTitle} numberOfLines={1}>
+              {familyName}
+            </Text>
+            <View style={styles.chips}>
+              <Text style={[styles.chip, styles.chipGold]}>{t("bannerPeople", { n: stats.people })}</Text>
+              <Text style={styles.chip}>{t("bannerGens", { n: stats.gens })}</Text>
+              <Text style={styles.chip}>{t("bannerPhotos", { n: stats.photos })}</Text>
+            </View>
+          </View>
+        </Pressable>
+      ) : null}
       <View style={{ flex: 1, flexDirection: "row" }}>
         <View style={{ flex: 1 }}>
           <ErrorBoundary
@@ -271,6 +333,15 @@ export default function TreeScreen() {
         </View>
         <Muted style={{ marginTop: 12 }}>{t("tapHint")}</Muted>
       </Sheet>
+      <Sheet visible={!!release && newsOpen} onClose={closeNews} title={t("whatsNewIn", { v: current })}>
+        {release?.notes[store.lang === "bm" ? "bm" : "en"].map((n) => (
+          <View key={n} style={styles.newsRow}>
+            <View style={styles.newsDot} />
+            <Text style={{ color: c.text, fontSize: 15, lineHeight: 22, flex: 1 }}>{n}</Text>
+          </View>
+        ))}
+        <Button title={t("ok")} onPress={closeNews} style={{ marginTop: 16 }} />
+      </Sheet>
     </Screen>
   );
 }
@@ -353,6 +424,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  banner: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#2E3F8F" },
+  crest: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: "#F2B92B", backgroundColor: "#24337A", alignItems: "center", justifyContent: "center" },
+  crestText: { color: "#F2B92B", fontSize: 20, fontWeight: "800" },
+  bannerTitle: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: { color: "#FFFFFF", backgroundColor: "#3D51A8", fontSize: 12, fontWeight: "600", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9, overflow: "hidden" },
+  chipGold: { color: "#1A1D2E", backgroundColor: "#F2B92B" },
+  newsRow: { flexDirection: "row", gap: 10, alignItems: "flex-start", paddingVertical: 5 },
+  newsDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#D49A00", marginTop: 8 },
   swatches: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingVertical: 8 },
   swatchBox: { alignItems: "center", gap: 4, width: 56 },
   swatch: { width: 52, height: 52, borderRadius: 12, overflow: "hidden", alignItems: "center", justifyContent: "center" },

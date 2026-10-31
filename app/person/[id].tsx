@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { relationLines } from "@/components/relation";

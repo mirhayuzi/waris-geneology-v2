@@ -30,6 +30,10 @@ export const META = {
   treeStyle: "tree_style",
   /** Tree screen background template id */
   treeBackground: "tree_background",
+  /** "1" once the welcome screens were seen or skipped */
+  onboarded: "onboarded",
+  /** The app version whose "What's new" was last shown */
+  seenVersion: "seen_version",
   legacyImported: "legacy_imported",
   /** Edits since the last backup, when that was, and until when "Later" hides the reminder */
   changesSinceBackup: "changes_since_backup",

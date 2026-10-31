@@ -1,17 +1,22 @@
 import type { ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Text } from "@/components/Text";
 import { useColors } from "@/lib/theme";
 import { Icon, type IconName, sheetStyle } from "./ui";
 
 /** Bottom sheet with a dimmed backdrop. Tap outside to close. */
 export function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title?: string; children: ReactNode }) {
   const c = useColors();
+  // A phone turned sideways is short: long sheets scroll instead of running off the screen
+  const { height } = useWindowDimensions();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent supportedOrientations={["portrait", "landscape"]}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={sheetStyle(c)}>
-        {title ? <Text style={[styles.title, { color: c.text }]}>{title}</Text> : null}
-        {children}
+      <View style={[sheetStyle(c), { maxHeight: height * 0.88 }]}>
+        <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
+          {title ? <Text style={[styles.title, { color: c.text }]}>{title}</Text> : null}
+          {children}
+        </ScrollView>
       </View>
     </Modal>
   );

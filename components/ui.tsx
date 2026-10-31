@@ -1,7 +1,8 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { router } from "expo-router";
 import type { ComponentProps, ReactNode } from "react";
-import { Pressable, StyleSheet, Text, TextInput, type TextInputProps, View, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, TextInput, type TextInputProps, View, type ViewStyle } from "react-native";
+import { fontFor, Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type Colors, useColors } from "@/lib/theme";
 
@@ -179,7 +180,7 @@ export function Field({ label, error, hint, ...props }: TextInputProps & { label
       <TextInput
         placeholderTextColor={c.muted}
         {...props}
-        style={[styles.input, { color: c.text, borderColor: error ? c.danger : c.border, backgroundColor: c.surface }, props.multiline && { minHeight: 80, textAlignVertical: "top" }]}
+        style={[styles.input, { fontFamily: fontFor(), color: c.text, borderColor: error ? c.danger : c.border, backgroundColor: c.surface }, props.multiline && { minHeight: 80, textAlignVertical: "top" }]}
       />
       {error ? <Text style={[styles.hint, { color: c.danger }]}>{error}</Text> : hint ? <Text style={[styles.hint, { color: c.muted }]}>{hint}</Text> : null}
     </View>

@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "@/components/Text";
 import { Icon, Muted, Screen, Section } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";

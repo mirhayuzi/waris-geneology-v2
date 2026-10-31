@@ -12,7 +12,9 @@ import {
   type SkParagraph,
   Skia,
   StrokeCap,
+  type SkTypefaceFontProvider,
   TextAlign,
+  useFonts,
   vec,
 } from "@shopify/react-native-skia";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -209,6 +211,19 @@ export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ 
     [t],
   );
 
+  // The Waris font for names on the cards (until it loads, the phone's own font is used)
+  const fonts = useFonts({
+    Jakarta: [
+      require("@expo-google-fonts/plus-jakarta-sans/400Regular/PlusJakartaSans_400Regular.ttf"),
+      require("@expo-google-fonts/plus-jakarta-sans/600SemiBold/PlusJakartaSans_600SemiBold.ttf"),
+      require("@expo-google-fonts/plus-jakarta-sans/700Bold/PlusJakartaSans_700Bold.ttf"),
+    ],
+  });
+  if (fonts && fonts !== fontProvider) {
+    fontProvider = fonts;
+    paraCache.clear();
+  }
+
   const picture = useMemo(() => {
     const rec = Skia.PictureRecorder();
     const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, layout.width, layout.height));
@@ -216,7 +231,7 @@ export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ 
     return rec.finishRecordingAsPicture();
     // photoTick: redraw when more photos have loaded
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, win, c, labels, t, photoTick]);
+  }, [layout, win, c, labels, t, photoTick, fonts]);
 
   // The background pattern stays still while the tree moves over it (drawn once per screen size)
   const pattern = useMemo(() => (background.pattern && view.w ? drawPattern(background, view.w, view.h) : null), [background, view.w, view.h]);
@@ -446,6 +461,7 @@ function drawPattern(bg: TreeBackground, w: number, h: number) {
 // ---------------------------------------------------------------------------
 
 const paraCache = new Map<string, SkParagraph>();
+let fontProvider: SkTypefaceFontProvider | null = null;
 
 function para(text: string, size: number, color: string, width: number, o: { bold?: boolean; lines?: number; fit?: boolean } = {}): SkParagraph {
   const lines = o.lines ?? 1;
@@ -453,15 +469,19 @@ function para(text: string, size: number, color: string, width: number, o: { bol
   const hitP = paraCache.get(key);
   if (hitP) return hitP;
   const make = (fs: number, limit: boolean) => {
-    const b = Skia.ParagraphBuilder.Make({
-      textAlign: TextAlign.Center,
-      ...(limit ? { maxLines: lines, ellipsis: "…" } : {}),
-    });
+    const b = Skia.ParagraphBuilder.Make(
+      {
+        textAlign: TextAlign.Center,
+        ...(limit ? { maxLines: lines, ellipsis: "…" } : {}),
+      },
+      fontProvider ?? undefined,
+    );
     b.pushStyle({
       color: Skia.Color(color),
       fontSize: fs,
       heightMultiplier: 1.15,
       fontStyle: { weight: o.bold ? FontWeight.SemiBold : FontWeight.Normal },
+      ...(fontProvider ? { fontFamilies: ["Jakarta"] } : {}),
     });
     b.addText(text);
     b.pop();

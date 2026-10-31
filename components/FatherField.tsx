@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { fontFor, Text } from "@/components/Text";
 import { yearOf } from "@/lib/dates";
 import { fatherCandidates } from "@/lib/match";
 import { fullName, type Person, type Sex } from "@/lib/model";
@@ -69,7 +70,7 @@ export function FatherField({
           placeholder={t("fatherNameHint")}
           placeholderTextColor={c.muted}
           autoCapitalize="words"
-          style={[styles.input, { color: c.text }]}
+          style={[styles.input, { color: c.text, fontFamily: fontFor() }]}
         />
       </View>
 

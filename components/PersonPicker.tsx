@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { fontFor, Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { fullName, type Person } from "@/lib/model";
 import { useStore } from "@/lib/store";
@@ -29,7 +30,7 @@ export function PersonList({ people, onPick, autoFocus, header }: { people: Pers
           placeholder={t("search")}
           placeholderTextColor={c.muted}
           autoFocus={autoFocus}
-          style={[styles.search, { color: c.text }]}
+          style={[styles.search, { color: c.text, fontFamily: fontFor() }]}
           clearButtonMode="while-editing"
         />
       </View>

@@ -3,6 +3,23 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.4.0",
+    notes: {
+      en: [
+        "A fresh look: the new Waris font across the app",
+        "Family banner on the tree: family name, people, generations and photos",
+        "Phones can turn sideways too, on every screen",
+        "Welcome screens for new users, and this note after each update",
+      ],
+      bm: [
+        "Rupa baharu: fon Waris yang baharu di seluruh aplikasi",
+        "Sepanduk keluarga pada salasilah: nama keluarga, bilangan orang, generasi dan gambar",
+        "Telefon juga boleh dipusing mengiring, di semua skrin",
+        "Skrin selamat datang untuk pengguna baharu, dan nota ini selepas setiap kemas kini",
+      ],
+    },
+  },
+  {
     version: "2.3.2",
     notes: {
       en: [
@@ -50,3 +67,12 @@ export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
     },
   },
 ];
+
+/**
+ * The release whose notes to show once at start-up: the current version, if it has notes and
+ * they were not shown yet. A brand-new user (no family yet) is not shown them.
+ */
+export function releaseToShow(current: string, seen: string | undefined, hasFamily: boolean) {
+  if (seen === current || (!seen && !hasFamily)) return undefined;
+  return RELEASES.find((r) => r.version === current);
+}

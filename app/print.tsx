@@ -1,6 +1,7 @@
 import * as Print from "expo-print";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { PersonPicker } from "@/components/PersonPicker";
 import { relationLines } from "@/components/relation";

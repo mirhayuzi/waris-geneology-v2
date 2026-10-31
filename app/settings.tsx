@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, Switch, View } from "react-native";
+import { Text } from "@/components/Text";
 import { PersonPicker } from "@/components/PersonPicker";
 import { Sheet } from "@/components/Sheet";
 import { useRestore } from "@/components/useRestore";

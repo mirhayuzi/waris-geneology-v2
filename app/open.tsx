@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
+import { Text } from "@/components/Text";
 import { useRestore } from "@/components/useRestore";
 import { Button, Icon, Muted, Screen } from "@/components/ui";
 import { readIncomingFile, type RestoreFiles, takeIncomingFile } from "@/lib/files";

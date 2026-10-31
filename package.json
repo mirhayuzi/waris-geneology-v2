@@ -1,6 +1,6 @@
 {
   "name": "waris",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -14,6 +14,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/native": "^7.1.25",
