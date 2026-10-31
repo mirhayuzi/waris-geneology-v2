@@ -39,6 +39,8 @@ const config: ExpoConfig = {
     package: APP_ID,
     versionCode: VERSION_CODE,
     permissions: [],
+    // Not used by Waris: leave out so the Play listing shows only what the app needs
+    blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW", "android.permission.RECORD_AUDIO"],
     // "Open with Waris" for family files from WhatsApp, Files, Gmail ...
     intentFilters: [
       {
