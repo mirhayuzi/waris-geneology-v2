@@ -6,7 +6,7 @@ import type { FamilySnapshot, LinkKind, Person, Sex } from "../model";
  *         |                      |
  *     Mohammad  ===========  Siti        Ali (Siti's brother) = Zaitun
  *          |                                |
- *   Mirhayuzi (1982) = Nisa       Aishah (older, 1975) , Bakar (1985)     Razak (Ali's son)
+ *   Mirhayuzi (1982) = Nisa       Aishah (older, 1975) , Bakar (1985, mother Rosnah)     Razak (Ali's son)
  *        |
  *   Fatimah (2015), Haffizuddin (2017)
  */
@@ -30,6 +30,7 @@ export function family(): FamilySnapshot {
   P("fatimah", "female", "2015");
   P("haffizuddin", "male", "2017");
   P("nisadad", "male", "1960");
+  P("rosnah", "female", "1962");
   const links: FamilySnapshot["links"] = [];
   const L = (parentId: string, childId: string, kind: LinkKind = "birth") =>
     links.push({ id: `${parentId}>${childId}`, parentId, childId, kind });
@@ -41,7 +42,8 @@ export function family(): FamilySnapshot {
   L("siti", "mirhayuzi");
   L("mohammad", "aishah");
   L("siti", "aishah");
-  L("mohammad", "bakar"); // half-brother via father only
+  L("mohammad", "bakar"); // half-brother: same father, a different mother
+  L("rosnah", "bakar");
   L("ali", "razak");
   L("zaitun", "razak");
   L("mirhayuzi", "fatimah");

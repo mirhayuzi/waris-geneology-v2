@@ -7,7 +7,7 @@ import { PersonPicker } from "@/components/PersonPicker";
 import { relationLines } from "@/components/relation";
 import { Button, Choice, Icon, IconButton, Muted, Screen } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
-import { shareExisting } from "@/lib/files";
+import { fileName, namedCopy, shareExisting } from "@/lib/files";
 import { relationText } from "@/lib/kinship";
 import { fullName, type Person } from "@/lib/model";
 import { printGroups, printHtml, type PrintOptions } from "@/lib/printlist";
@@ -73,6 +73,11 @@ export default function PrintScreen() {
     );
   };
 
+  // e.g. "Senarai-keluarga-Keluarga-Sibil-2026-11-03.pdf"
+  const pdfName = () =>
+    fileName(`${t("pdfListName")} ${graph.snapshot.familyName || (start ? fullName(start) : "")} ${new Date().toISOString().slice(0, 10)}`, "pdf");
+  const makePdf = async () => (await Print.printToFileAsync({ html: html(), width: 842, height: 595 })).uri;
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -121,7 +126,12 @@ export default function PrintScreen() {
           </Text>
         </View>
 
-        <Button title={t("printNow")} icon="print" disabled={!count || busy} onPress={() => run(async () => void (await Print.printAsync({ html: html(), orientation: Print.Orientation.landscape })))} style={{ marginTop: 16 }} />
+        <Button title={t("printNow")} icon="print" disabled={!count || busy} onPress={() =>
+            run(async () => {
+              const uri = await namedCopy(await makePdf(), pdfName());
+              await Print.printAsync({ uri, orientation: Print.Orientation.landscape });
+            })
+          } style={{ marginTop: 16 }} />
         <Button
           title={t("sharePdf")}
           icon="share"
@@ -129,8 +139,7 @@ export default function PrintScreen() {
           disabled={!count || busy}
           onPress={() =>
             run(async () => {
-              const { uri } = await Print.printToFileAsync({ html: html(), width: 842, height: 595 });
-              await shareExisting(uri, "application/pdf", t("printList"));
+              await shareExisting(await makePdf(), "application/pdf", t("printList"), pdfName());
             })
           }
           style={{ marginTop: 10 }}

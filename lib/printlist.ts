@@ -112,7 +112,7 @@ export function printHtml(groups: { label: string; rows: PrintRow[] }[], l: Prin
           .join(""),
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(l.title)}</title>
 <style>
 @page { size: A4 landscape; margin: 14mm 12mm; }
 body { font-family: -apple-system, Roboto, "Segoe UI", sans-serif; color: #1d1d1d; font-size: 10.5pt; }

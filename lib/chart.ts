@@ -142,7 +142,7 @@ export function treeSvg(layout: TreeLayout, photos: ChartPhotos, l: ChartLabels)
 export function chartHtml(layout: TreeLayout, paper: PaperSize, l: ChartLabels, photos: ChartPhotos = {}): string {
   const P = PAPER[paper];
   const big = paper === "a3" ? 1.35 : 1;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(l.title)}</title>
 <style>
 @page { size: ${P.css}; margin: 0; }
 * { box-sizing: border-box; }

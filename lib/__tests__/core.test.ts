@@ -3,7 +3,7 @@ import { buildBackup, parseBackup } from "../backup";
 import { ageAt, formatDate, parseInput, toInput } from "../dates";
 import { toGedcom } from "../gedcom";
 import { FamilyGraph } from "../graph";
-import { connectionPath, describePath, describeVia, familySide, relationships } from "../kinship";
+import { bmCousin, connectionPath, describePath, describeVia, familySide, relationships, relationSummary, relationText } from "../kinship";
 import { fatherCandidates, possibleDuplicates } from "../match";
 import { DEFAULT_OPTIONS, layoutTree } from "../layout";
 import { convertLegacy } from "../legacy";
@@ -76,7 +76,38 @@ describe("kinship", () => {
     expect(rel("mirhayuzi", "ali")).toEqual(["uncle / bapa saudara"]);
     expect(rel("ali", "mirhayuzi")).toEqual(["nephew / anak saudara"]);
     expect(rel("mirhayuzi", "razak")).toEqual(["first cousin / sepupu"]);
-    expect(rel("fatimah", "razak")).toEqual(["first cousin once removed / sepupu (1 generasi ke atas)"]);
+    expect(rel("fatimah", "razak")).toEqual(["first cousin once removed / sepupu bapa"]);
+    expect(rel("razak", "fatimah")).toEqual(["first cousin once removed / anak sepupu"]);
+  });
+  it("says what a cousin of a parent is called, and who is in between", () => {
+    const g = graph();
+    expect(relationships(g, "fatimah", "razak")[0].call).toBe("pakcik");
+    expect(relationships(g, "razak", "fatimah")[0].call).toBe("anak saudara");
+    const s = relationSummary(g, "fatimah", "razak");
+    expect(s.via?.person.id).toBe("mirhayuzi");
+    expect(s.via?.toA.bm).toBe("bapa");
+    expect(s.common.map((p) => p.id)).toEqual(["sibil"]);
+    expect(s.commonToA?.bm).toBe("moyang lelaki");
+    expect(s.commonToB?.bm).toBe("datuk");
+    expect(relationText(g, "fatimah", "razak")?.side).toBeUndefined(); // "sepupu bapa" says it already
+    expect(relationText(g, "mirhayuzi", "razak")?.side).toBe("mother");
+  });
+  it("numbers cousins: sepupu, sepupu kedua, sepupu ketiga", () => {
+    expect(bmCousin(1)).toBe("sepupu");
+    expect(bmCousin(2)).toBe("sepupu kedua");
+    expect(bmCousin(3)).toBe("sepupu ketiga");
+    const f = family();
+    // Razak's son and Mirhayuzi's daughter are second cousins
+    f.persons.push({ ...f.persons.find((p) => p.id === "razak")!, id: "rizal", givenName: "rizal", birthDate: "2014" });
+    f.links.push({ id: "razak>rizal", parentId: "razak", childId: "rizal", kind: "birth" });
+    expect(relationships(new FamilyGraph(f), "fatimah", "rizal")[0]).toMatchObject({ en: "second cousin", bm: "sepupu kedua" });
+  });
+  it("only says half sibling when both other parents are known and different", () => {
+    const f = family();
+    f.links = f.links.filter((l) => l.id !== "rosnah>bakar"); // Bakar's mother not entered
+    const g = new FamilyGraph(f);
+    expect(relationships(g, "mirhayuzi", "bakar").map((k) => k.bm)).toEqual(["adik"]);
+    expect(g.siblings("mirhayuzi").map((s) => `${s.person.id}${s.half ? "*" : ""}`)).toEqual(["aishah", "bakar"]);
   });
   it("names relatives by marriage", () => {
     expect(rel("mirhayuzi", "nisa")).toEqual(["wife / isteri"]);

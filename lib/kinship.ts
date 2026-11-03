@@ -6,6 +6,8 @@ import type { LinkKind, Person } from "./model";
 export interface Kin {
   en: string;
   bm: string;
+  /** What A usually calls B in everyday Malay, when it differs from `bm` (e.g. pakcik for sepupu bapa) */
+  call?: string;
 }
 
 const g = (sex: Person["sex"], male: string, female: string) => (sex === "female" ? female : male);
@@ -22,8 +24,26 @@ const ORD = ["", "first", "second", "third", "fourth", "fifth", "sixth", "sevent
 const ord = (n: number) => ORD[n] ?? `${n}th`;
 const greats = (n: number) => (n <= 0 ? "" : n === 1 ? "great-" : `${n}x great-`);
 
-/** Blood relationship where B is `up` generations above the common ancestor from A, and `down` below it. */
-export function bloodKin(up: number, down: number, b: Person, a: Person, half?: { sex: Person["sex"] }): Kin {
+const BM_ORD = ["", "", "kedua", "ketiga", "keempat", "kelima", "keenam", "ketujuh", "kelapan", "kesembilan", "kesepuluh"];
+/** sepupu, sepupu kedua, sepupu ketiga ... */
+export const bmCousin = (degree: number) => (degree <= 1 ? "sepupu" : `sepupu ${BM_ORD[degree] ?? `ke-${degree}`}`);
+
+/** A's ancestor `n` generations up, as a word: bapa, nenek, moyang ... (`sex` of that ancestor when known) */
+function bmAncestor(n: number, sex?: Person["sex"]): string {
+  const pick = (m: string, f: string, either: string) => (sex === "male" ? m : sex === "female" ? f : either);
+  if (n === 1) return pick("bapa", "ibu", "ibu/bapa");
+  if (n === 2) return pick("datuk", "nenek", "datuk/nenek");
+  if (n === 3) return "moyang";
+  return `moyang (${n - 2} generasi ke atas)`;
+}
+/** A's descendant `n` generations down: anak, cucu, cicit ... */
+const bmDescendant = (n: number) => ["", "anak", "cucu", "cicit", "piut", "canggah"][n] ?? `keturunan ke-${n}`;
+
+/**
+ * Blood relationship where B is `up` generations above the common ancestor from A, and `down` below it.
+ * `via` is the sex of A's ancestor who is B's cousin (for "sepupu bapa" / "sepupu ibu").
+ */
+export function bloodKin(up: number, down: number, b: Person, a: Person, half?: { sex: Person["sex"] }, via?: Person["sex"]): Kin {
   const s = b.sex;
   if (up === 0 && down === 0) return { en: "self", bm: "diri sendiri" };
   if (up === 0) {
@@ -61,17 +81,31 @@ export function bloodKin(up: number, down: number, b: Person, a: Person, half?: 
   }
   const degree = Math.min(up, down) - 1;
   const removed = Math.abs(up - down);
-  const bmCousin = degree === 1 ? "sepupu" : `${["", "", "dua", "tiga", "empat", "lima"][degree] ?? degree} pupu`;
-  if (removed === 0) return { en: `${ord(degree)} cousin`, bm: bmCousin };
+  const cousin = bmCousin(degree);
+  if (removed === 0) return { en: `${ord(degree)} cousin`, bm: cousin };
   const times = removed === 1 ? "once" : removed === 2 ? "twice" : `${removed} times`;
-  const dir = up > down ? "atas" : "bawah";
-  return { en: `${ord(degree)} cousin ${times} removed`, bm: `${bmCousin} (${removed} generasi ke ${dir})` };
+  const en = `${ord(degree)} cousin ${times} removed`;
+  if (up > down) {
+    // B is a cousin of A's parent / grandparent ...: "sepupu bapa", called pakcik / makcik
+    const call = removed === 1 ? g(s, "pakcik", "makcik") : removed === 2 ? g(s, "datuk", "nenek") : undefined;
+    return { en, bm: `${cousin} ${bmAncestor(removed, via)}`, call };
+  }
+  // B is a child / grandchild ... of A's cousin: "anak sepupu", called anak saudara
+  const call = removed === 1 ? "anak saudara" : removed === 2 ? "cucu saudara" : undefined;
+  return { en, bm: `${bmDescendant(removed)} ${cousin}`, call };
 }
 
-interface BloodHit {
+export interface BloodHit {
   up: number;
   down: number;
   half?: { sex: Person["sex"] };
+  /** The nearest shared ancestors (one person, or a couple) */
+  common: string[];
+  /**
+   * For cousins a generation or more apart, the person in between: A's elder who is B's cousin
+   * (B older), or B's elder who is A's cousin (B younger).
+   */
+  viaId?: string;
 }
 
 /** Closest blood link between A and B through a common ancestor (or B/A themselves). */
@@ -79,21 +113,32 @@ export function findBlood(graph: FamilyGraph, aId: string, bId: string): BloodHi
   const da = graph.ancestorDepths(aId);
   const db = graph.ancestorDepths(bId);
   let best: BloodHit | null = null;
-  let commons: string[] = [];
   for (const [id, up] of da) {
     const down = db.get(id);
     if (down === undefined) continue;
     const total = up + down;
     if (!best || total < best.up + best.down || (total === best.up + best.down && up < best.up)) {
-      best = { up, down };
-      commons = [id];
-    } else if (up === best.up && down === best.down) commons.push(id);
+      best = { up, down, common: [id] };
+    } else if (up === best.up && down === best.down) best.common.push(id);
   }
-  if (best && best.up > 0 && best.down > 0 && commons.length === 1) {
-    // Only one shared ancestor at that level: half relation, unless that ancestor's partner is also an ancestor of both
-    const only = graph.get(commons[0])!;
-    const partnerShared = graph.partners(only.id).some((p) => da.get(p.id) === best!.up && db.get(p.id) === best!.down);
-    if (!partnerShared && best.up === 1 && best.down === 1) best.half = { sex: only.sex };
+  if (!best) return null;
+  if (best.up === 1 && best.down === 1 && best.common.length === 1) {
+    // One shared parent. Half sibling only when both also have another parent recorded (and,
+    // with one shared, those differ): a parent not entered yet is not evidence of "half".
+    const only = graph.get(best.common[0])!;
+    const lineage = (id: string) => graph.parentLinksOf(id).filter((l) => l.kind !== "step" && l.kind !== "milk" && l.parentId !== only.id);
+    if (lineage(aId).length && lineage(bId).length) best.half = { sex: only.sex };
+  }
+  if (best.up >= 2 && best.down >= 2 && best.up !== best.down) {
+    // Cousins a generation or more apart: find the elder in between, on the older side's line
+    const [mine, k, other] = best.up > best.down ? [da, best.up - best.down, best.down] : [db, best.down - best.up, best.up];
+    const common = best.common[0];
+    for (const [id, d] of mine) {
+      if (d === k && graph.ancestorDepths(id).get(common) === other) {
+        best.viaId = id;
+        break;
+      }
+    }
   }
   return best;
 }
@@ -147,7 +192,7 @@ export function relationships(graph: FamilyGraph, aId: string, bId: string): Kin
   // Blood
   const blood = findBlood(graph, aId, bId);
   if (blood && !(blood.up === 1 && blood.down === 0 && asParent && asParent !== "birth") && !(blood.up === 0 && blood.down === 1 && asChild && asChild !== "birth")) {
-    add(bloodKin(blood.up, blood.down, b, a, blood.half));
+    add(bloodKin(blood.up, blood.down, b, a, blood.half, blood.up > blood.down && blood.viaId ? graph.get(blood.viaId)?.sex : undefined));
   }
 
   if (out.length === 0 || !blood) {
@@ -368,8 +413,50 @@ export interface RelationText {
 export function relationText(graph: FamilyGraph, aId: string, bId: string, customTerms: Record<string, string> = {}): RelationText | null {
   if (aId === bId) return null;
   const direct = relationships(graph, aId, bId);
-  if (direct.length) return { direct, side: familySide(graph, aId, bId) };
+  if (direct.length) {
+    const hit = findBlood(graph, aId, bId);
+    // "sepupu bapa" already says which side
+    const named = hit && hit.viaId && hit.up - hit.down === 1;
+    return { direct, side: named ? undefined : familySide(graph, aId, bId) };
+  }
   const via = describeVia(graph, aId, bId);
   if (via) return { direct: [], via, custom: customTerms[via.key] };
   return null;
+}
+
+/** What the "how are they related" screen shows beyond the term itself. */
+export interface RelationSummary {
+  /** The closest blood link, when there is one */
+  blood: BloodHit | null;
+  /** The nearest shared ancestors (a person or a couple), when A and B meet above both of them */
+  common: Person[];
+  /** What the shared ancestor is to A and to B (moyang, datuk ...) */
+  commonToA?: Kin;
+  commonToB?: Kin;
+  /** For cousins a generation or more apart: the person in between and how they are related */
+  via?: { person: Person; toA: Kin; toB: Kin };
+  side?: "father" | "mother";
+}
+
+export function relationSummary(graph: FamilyGraph, aId: string, bId: string): RelationSummary {
+  const blood = aId === bId ? null : findBlood(graph, aId, bId);
+  const out: RelationSummary = { blood, common: [], side: familySide(graph, aId, bId) };
+  if (!blood) return out;
+  const a = graph.get(aId)!;
+  const b = graph.get(bId)!;
+  if (blood.up > 0 && blood.down > 0) {
+    out.common = blood.common.map((id) => graph.get(id)!).filter(Boolean);
+    const first = out.common[0];
+    if (first) {
+      out.commonToA = bloodKin(blood.up, 0, first, a);
+      out.commonToB = bloodKin(blood.down, 0, first, b);
+    }
+  }
+  const via = blood.viaId ? graph.get(blood.viaId) : undefined;
+  if (via) {
+    const toA = relationships(graph, aId, via.id)[0];
+    const toB = relationships(graph, bId, via.id)[0];
+    if (toA && toB) out.via = { person: via, toA, toB };
+  }
+  return out;
 }

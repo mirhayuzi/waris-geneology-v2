@@ -1,0 +1,23 @@
+diff --git a/android/src/main/java/expo/modules/print/PrintModule.kt b/android/src/main/java/expo/modules/print/PrintModule.kt
+index 719d2969772d8a99faf0025fabc145f1f969c6f7..e2d813a245775e0fe7c6740c7a41acec3fcbbe8f 100644
+--- a/android/src/main/java/expo/modules/print/PrintModule.kt
++++ b/android/src/main/java/expo/modules/print/PrintModule.kt
+@@ -1,6 +1,7 @@
+ package expo.modules.print
+ 
+ import android.content.Context
++import android.net.Uri
+ import android.os.ParcelFileDescriptor
+ import android.print.PrintAttributes
+ import android.print.PrintManager
+@@ -148,7 +149,9 @@ class PrintModule : Module() {
+   private fun printDocumentToPrinter(document: PrintDocumentAdapter, options: PrintOptions) {
+     (appContext.throwingActivity.getSystemService(Context.PRINT_SERVICE) as? PrintManager)?.let {
+       val attributes = getAttributesFromOptions(options)
+-      it.print(jobName, document, attributes.build())
++      // Waris: name the job after the file, so "Save as PDF" suggests that name
++      val name = options.uri?.let { u -> Uri.parse(u).lastPathSegment?.removeSuffix(".pdf") }?.takeIf { n -> n.isNotBlank() } ?: jobName
++      it.print(name, document, attributes.build())
+     } ?: throw PrintManagerNotAvailableException()
+   }
+ 

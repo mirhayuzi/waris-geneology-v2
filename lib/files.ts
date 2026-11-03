@@ -5,6 +5,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
+export { fileName } from "./naming";
+
 /**
  * Photos live in <app documents>/photos/. The database stores only the file name,
  * so paths survive app updates (iOS changes the full container path).
@@ -182,10 +184,22 @@ export async function shareFile(name: string, content: string, mime: string, opt
   return true;
 }
 
-/** Shares a file that already exists (e.g. a PDF made by expo-print). */
-export async function shareExisting(uri: string, mime: string, title: string): Promise<boolean> {
+/** Copies a file to the cache under a readable name (expo-print names its PDFs with a random id). */
+export async function namedCopy(uri: string, name: string): Promise<string> {
+  if (Platform.OS === "web" || !FileSystem.cacheDirectory) return uri;
+  const to = `${FileSystem.cacheDirectory}${name}`;
+  await FileSystem.deleteAsync(to, { idempotent: true });
+  await FileSystem.copyAsync({ from: uri, to });
+  await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+  return to;
+}
+
+/** Shares a file that already exists (e.g. a PDF made by expo-print), under `name` when given. */
+export async function shareExisting(uri: string, mime: string, title: string, name?: string): Promise<boolean> {
   if (!(await Sharing.isAvailableAsync())) return false;
-  await Sharing.shareAsync(uri, { mimeType: mime, dialogTitle: title });
+  const file = name ? await namedCopy(uri, name) : uri;
+  const UTI = mime === "application/pdf" ? "com.adobe.pdf" : undefined;
+  await Sharing.shareAsync(file, { mimeType: mime, dialogTitle: title, UTI });
   return true;
 }
 

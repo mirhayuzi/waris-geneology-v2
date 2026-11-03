@@ -1,6 +1,6 @@
 {
   "name": "waris",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -59,5 +59,10 @@
     "typescript": "~5.9.3",
     "vitest": "^2.1.9"
   },
-  "packageManager": "pnpm@9.12.0"
+  "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "expo-print": "patches/expo-print.patch"
+    }
+  }
 }

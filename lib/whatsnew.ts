@@ -3,6 +3,25 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.6.0",
+    notes: {
+      en: [
+        "New \"How are they related?\" page: both people side by side with photos, the answer in one sentence, and where their families meet",
+        "Clearer Malay terms: sepupu bapa (pakcik), anak sepupu (anak saudara), sepupu kedua, sepupu ketiga",
+        "Brothers and sisters are only called half (seibu / sebapa) when both other parents are entered and different",
+        "PDFs are named after the family when you share or save them",
+        "Privacy policy link on the About page",
+      ],
+      bm: [
+        "Halaman \"Hubungan\" baharu: dua orang bersebelahan dengan gambar, jawapan dalam satu ayat, dan di mana keluarga mereka bertemu",
+        "Istilah Melayu lebih jelas: sepupu bapa (pakcik), anak sepupu (anak saudara), sepupu kedua, sepupu ketiga",
+        "Adik-beradik hanya disebut seibu / sebapa apabila ibu atau bapa yang lain kedua-duanya dimasukkan dan berbeza",
+        "Fail PDF dinamakan mengikut keluarga apabila dikongsi atau disimpan",
+        "Pautan dasar privasi di halaman Tentang Waris",
+      ],
+    },
+  },
+  {
     version: "2.5.0",
     notes: {
       en: [

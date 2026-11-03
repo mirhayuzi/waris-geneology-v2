@@ -108,7 +108,9 @@ export class FamilyGraph {
     }
     const list = [...seen.entries()].map(([id, shared]) => {
       const theirs = new Set(this.parentLinksOf(id).map((l) => l.parentId));
-      const half = shared.size < Math.max(mine.size, theirs.size);
+      // Half only when each has another parent recorded and those differ: a parent who is
+      // simply not entered yet is not evidence of a half sibling
+      const half = shared.size < mine.size && shared.size < theirs.size;
       return { person: this.persons.get(id)!, half };
     });
     return list.sort((a, b) => sortKey(a.person.birthDate).localeCompare(sortKey(b.person.birthDate)));

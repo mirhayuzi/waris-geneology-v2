@@ -33,7 +33,7 @@ describe("excel export", () => {
     // Biggest family line first; Aminah sits beside Norbidin rather than starting her own line
     expect(name(outline[0])).toBe("sibil");
     const roots = outline.filter((r) => (r[0] as { value: string }).value === "—").map(name);
-    expect(roots).toEqual(["sibil", "norbidin", "nisadad"]);
+    expect(roots).toEqual(["sibil", "norbidin", "nisadad", "rosnah"]);
     // Mirhayuzi is in both his mother's and his father's family line, each listed in full
     expect(outline.map(name).filter((n) => n === "mirhayuzi")).toHaveLength(2);
     const total = (outline[0][6] as { value: { v: number } }).value.v;

@@ -8,7 +8,7 @@ import { lifespan } from "@/components/TreeCard";
 import { Button, Choice, Icon, IconButton, Muted, Screen } from "@/components/ui";
 import { type ChartPhotos, chartHtml, PAPER, type PaperSize } from "@/lib/chart";
 import { formatDate } from "@/lib/dates";
-import { photoThumbnail, shareExisting } from "@/lib/files";
+import { fileName, namedCopy, photoThumbnail, shareExisting } from "@/lib/files";
 import { layoutTree } from "@/lib/layout";
 import { fullName } from "@/lib/model";
 import { useStore } from "@/lib/store";
@@ -76,6 +76,9 @@ export default function ChartScreen() {
   };
 
   const size = PAPER[paper];
+  // e.g. "Salasilah-Keturunan-Tiajar-binti-Sibil-A4.pdf"
+  const pdfName = () => fileName(`${t("pdfChartName")} ${start ? t("descendantsOf", { name: fullName(start) }) : ""} ${paper.toUpperCase()}`, "pdf");
+  const makePdf = async () => (await Print.printToFileAsync({ html: await html(), width: size.w, height: size.h })).uri;
 
   return (
     <Screen title={t("chartTitle")} back>
@@ -122,8 +125,7 @@ export default function ChartScreen() {
           disabled={!people.length || busy}
           onPress={() =>
             run(async () => {
-              const { uri } = await Print.printToFileAsync({ html: await html(), width: size.w, height: size.h });
-              await shareExisting(uri, "application/pdf", t("chartTitle"));
+              await shareExisting(await makePdf(), "application/pdf", t("chartTitle"), pdfName());
             })
           }
           style={{ marginTop: 16 }}
@@ -133,7 +135,13 @@ export default function ChartScreen() {
           icon="print"
           kind="secondary"
           disabled={!people.length || busy}
-          onPress={() => run(async () => void (await Print.printAsync({ html: await html(), orientation: Print.Orientation.landscape })))}
+          onPress={() =>
+            run(async () => {
+              // Print from a named file, so "Save as PDF" suggests the same name
+              const uri = await namedCopy(await makePdf(), pdfName());
+              await Print.printAsync({ uri, orientation: Print.Orientation.landscape });
+            })
+          }
           style={{ marginTop: 10 }}
         />
         {busy ? <ActivityIndicator style={{ marginTop: 16 }} color={c.primary} /> : null}

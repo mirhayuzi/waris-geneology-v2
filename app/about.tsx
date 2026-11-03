@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Icon, Muted, Screen, Section } from "@/components/ui";
 import { useStore } from "@/lib/store";
@@ -8,6 +8,7 @@ import { appVersion } from "@/lib/version";
 import { RELEASES } from "@/lib/whatsnew";
 
 const LOGO = require("@/assets/images/favicon.png");
+const PRIVACY_URL = "https://sites.google.com/view/waris-privasi";
 
 export default function AboutScreen() {
   const c = useColors();
@@ -34,6 +35,16 @@ export default function AboutScreen() {
           <Icon name="verified-user" size={26} color={c.focusRing} />
           <Text style={{ color: c.primaryText, fontSize: 14, lineHeight: 20, flex: 1 }}>{t("privacyPromise")}</Text>
         </View>
+
+        <Pressable
+          onPress={() => Linking.openURL(PRIVACY_URL)}
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.link, { backgroundColor: c.surface, borderColor: c.border }, pressed && { opacity: 0.6 }]}
+        >
+          <Icon name="policy" color={c.primary} />
+          <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{t("privacyPolicy")}</Text>
+          <Icon name="open-in-new" size={20} color={c.muted} />
+        </Pressable>
 
         <Section title={t("whatsNew")}>
           {RELEASES.map((r, i) => (
@@ -70,6 +81,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 30, fontWeight: "800", letterSpacing: -0.5 },
   version: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, borderWidth: 1 },
   promise: { marginTop: 20, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 },
+  link: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12, minHeight: 52, paddingHorizontal: 16, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   release: { padding: 14 },
   note: { flexDirection: "row", gap: 10, alignItems: "flex-start", marginTop: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
