@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { PersonPicker } from "@/components/PersonPicker";
+import { Portrait } from "@/components/Portrait";
 import { relationLines } from "@/components/relation";
 import { Sheet } from "@/components/Sheet";
 import { Text } from "@/components/Text";
@@ -52,34 +53,56 @@ export default function RelateScreen() {
   const toHome = (x: Person) => (home && home.id !== x.id ? relationText(graph, home.id, x.id, customTerms) : null);
   const open = (p: Person) => router.push(`/person/${p.id}`);
 
-  /** One of the two people, big photo first */
-  const personCard = (label: string, p: Person | undefined, which: "a" | "b") => (
+  /** What `x` is to `y`, as a short badge: "Pakcik", "Anak saudara", "Ibu" */
+  const badge = (r: RelationText | null | undefined): string | undefined => {
+    if (!r) return undefined;
+    const k = r.direct[0];
+    if (k) return cap(lang === "bm" ? (k.call ?? k.bm) : k.en);
+    return r.custom ? cap(r.custom) : undefined;
+  };
+
+  /** One of the two people: a big upright photo first, like a phone-compare page */
+  const personCard = (label: string, p: Person | undefined, which: "a" | "b", rel?: string, warm?: boolean) => (
     <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-      {p ? <View style={[styles.cardStripe, { backgroundColor: p.sex === "female" ? c.female : c.male }]} /> : null}
       <Pressable onPress={() => (p ? open(p) : setPicking(which))} accessibilityRole="button" accessibilityLabel={p ? fullName(p) : t("pickPerson")}>
-        <View style={[styles.bigPhoto, { borderColor: c.focusRing }]}>
-          {p ? <Avatar person={p} size={96} /> : <Icon name="person-search" size={48} color={c.primary} />}
-        </View>
+        {p ? (
+          <Portrait person={p} height={232} />
+        ) : (
+          <View style={[styles.emptyPhoto, { backgroundColor: c.surfaceAlt }]}>
+            <Icon name="person-search" size={56} color={c.primary} />
+          </View>
+        )}
       </Pressable>
-      <Text style={[styles.cardLabel, { color: c.muted }]}>{label}</Text>
-      {p ? (
-        <>
-          <Text style={[styles.cardName, { color: c.text }]} numberOfLines={2}>
-            {cardName(p)[0]}
-          </Text>
-          {cardName(p)[1] ? (
-            <Text style={{ color: c.muted, textAlign: "center", fontSize: 13 }} numberOfLines={2}>
-              {cardName(p)[1]}
+      <Pressable onPress={() => setPicking(which)} style={[styles.change, { backgroundColor: c.surface }]} accessibilityRole="button" accessibilityLabel={`${t("changePerson")}: ${label}`}>
+        <Text style={{ color: c.primary, fontSize: 12, fontWeight: "700" }}>{t("changePerson")}</Text>
+      </Pressable>
+      <View style={[styles.genderBar, { backgroundColor: p ? (p.sex === "female" ? c.female : c.male) : c.border }]} />
+      <View style={styles.cardBody}>
+        {rel ? (
+          <View style={[styles.badge, { backgroundColor: warm ? `${c.focusRing}33` : c.surfaceAlt }]}>
+            <Text style={{ color: warm ? c.text : c.primary, fontSize: 12, fontWeight: "700", textAlign: "center" }} numberOfLines={2}>
+              {rel}
             </Text>
-          ) : null}
-          <Muted style={{ fontSize: 13 }}>{lifespan(p, t)}</Muted>
-        </>
-      ) : (
-        <Text style={[styles.cardName, { color: c.text }]}>{t("pickPerson")}</Text>
-      )}
-      <Pressable onPress={() => setPicking(which)} style={[styles.change, { borderColor: c.border }]} accessibilityRole="button">
-        <Text style={{ color: c.primary, fontSize: 13, fontWeight: "600" }}>{t("changePerson")}</Text>
-      </Pressable>
+          </View>
+        ) : (
+          <Text style={[styles.cardLabel, { color: c.muted }]}>{label}</Text>
+        )}
+        {p ? (
+          <>
+            <Text style={[styles.cardName, { color: c.text }]} numberOfLines={2}>
+              {cardName(p)[0]}
+            </Text>
+            {cardName(p)[1] ? (
+              <Text style={{ color: c.muted, textAlign: "center", fontSize: 13 }} numberOfLines={2}>
+                {cardName(p)[1]}
+              </Text>
+            ) : null}
+            <Text style={{ color: c.muted, textAlign: "center", fontSize: 13 }}>{lifespan(p, t)}</Text>
+          </>
+        ) : (
+          <Text style={[styles.cardName, { color: c.text }]}>{t("pickPerson")}</Text>
+        )}
+      </View>
     </View>
   );
 
@@ -123,15 +146,18 @@ export default function RelateScreen() {
   const main = result?.ab?.direct[0];
   const side = s?.side ? cap(t(s.side === "father" ? "sideFather" : "sideMother")) : undefined;
   const genUp = (n: number) => (n === 1 ? t("genUp1") : t("genUpN", { n }));
+  // One shared ancestor to show: the husband when they share a couple
+  const anc = s ? (s.common.find((p) => p.sex === "male") ?? s.common[0]) : undefined;
+  const ancPartner = s && anc ? s.common.find((p) => p.id !== anc.id) : undefined;
 
   return (
     <Screen title={t("relationship")} back>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
         {/* The two people, side by side */}
         <View style={styles.pair}>
-          {personCard(t("personA"), a, "a")}
-          <View style={{ width: 14 }} />
-          {personCard(t("personB"), b, "b")}
+          {personCard(t("personA"), a, "a", badge(result?.ba))}
+          <View style={{ width: 12 }} />
+          {personCard(t("personB"), b, "b", badge(result?.ab), true)}
           {a && b ? (
             <Pressable
               onPress={() => {
@@ -178,46 +204,48 @@ export default function RelateScreen() {
                 <View style={styles.chips}>
                   {side ? <Chip text={side} /> : null}
                   <Chip text={s.blood ? t("typeBlood") : t("typeMarriage")} />
-                  {main ? <Chip text={otherTerm(main)} italic /> : null}
                 </View>
               </View>
 
-              {/* Where their lines meet: just the shared ancestor, however far up */}
-              {s.blood && s.blood.up > 0 && s.blood.down > 0 && s.common.length && s.commonToA && s.commonToB ? (
-                <Section title={s.common.length > 1 ? t("sharedAncestors") : t("meetAt")}>
+              {/* Where their lines meet: one shared ancestor (the husband of a couple), however far up */}
+              {s.blood && s.blood.up > 0 && s.blood.down > 0 && anc && s.commonToA && s.commonToB ? (
+                <Section title={t("meetAt")}>
                   <View style={styles.meet}>
-                    <View style={styles.meetPhotos}>
-                      {s.common.map((p) => (
-                        <Pressable key={p.id} onPress={() => open(p)} accessibilityRole="button" accessibilityLabel={fullName(p)}>
-                          <View style={[styles.meetPhoto, { borderColor: c.focusRing }]}>
-                            <Avatar person={p} size={76} />
-                          </View>
-                        </Pressable>
-                      ))}
-                    </View>
                     <Text style={[styles.meetKicker, { color: c.focusRing }]}>{t("sharedAncestor").toUpperCase()}</Text>
-                    <Text style={[styles.meetName, { color: c.text }]}>{s.common.map((p) => fullName(p)).join(" & ")}</Text>
-                    {s.common.length === 1 ? <Muted>{lifespan(s.common[0], t)}</Muted> : null}
+                    <Pressable onPress={() => open(anc)} accessibilityRole="button" accessibilityLabel={fullName(anc)} style={styles.meetPhoto}>
+                      <Portrait person={anc} height={210} radius={16} />
+                      <View style={[styles.genderBar, { backgroundColor: anc.sex === "female" ? c.female : c.male }]} />
+                    </Pressable>
+                    <Text style={[styles.meetName, { color: c.text }]}>{[anc.prefix, cardName(anc)[0]].filter(Boolean).join(" ")}</Text>
+                    {cardName(anc)[1] ? <Muted>{cardName(anc)[1]}</Muted> : null}
+                    {ancPartner ? (
+                      <Muted style={{ textAlign: "center" }}>
+                        {t(anc.sex === "female" ? "withHusband" : "withWife", { name: [ancPartner.prefix, ancPartner.givenName].filter(Boolean).join(" ") })}
+                      </Muted>
+                    ) : null}
                     <View style={styles.meetBoxes}>
                       {[
                         { who: a, kin: s.commonToA, n: s.blood.up },
                         { who: b, kin: s.commonToB, n: s.blood.down },
                       ].map(({ who, kin, n }) => (
                         <View key={who.id} style={[styles.meetBox, { backgroundColor: c.surfaceAlt }]}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Icon name="north" size={16} color={c.primary} />
-                            <Text style={{ color: c.text, fontSize: 13, fontWeight: "700", flex: 1 }} numberOfLines={1}>
-                              {who.givenName}
-                            </Text>
+                          <Text style={{ color: c.text, fontSize: 13, fontWeight: "700" }} numberOfLines={1}>
+                            {who.givenName}
+                          </Text>
+                          <Text style={{ color: c.primary, fontSize: 16, fontWeight: "800" }}>{cap(term(kin).replace(/ (lelaki|perempuan)$/, ""))}</Text>
+                          <View style={styles.dots} accessibilityLabel={genUp(n)}>
+                            {Array.from({ length: Math.min(n, 6) }, (_, i) => (
+                              <View key={i} style={[styles.dot, { backgroundColor: c.primary }]} />
+                            ))}
+                            {n > 6 ? <Text style={{ color: c.primary, fontSize: 12, fontWeight: "700" }}>+{n - 6}</Text> : null}
                           </View>
-                          <Text style={{ color: c.primary, fontSize: 15, fontWeight: "700" }}>{cap(term(kin).replace(/ (lelaki|perempuan)$/, ""))}</Text>
                           <Muted style={{ fontSize: 12 }}>{genUp(n)}</Muted>
                         </View>
                       ))}
                     </View>
                     <Pressable
                       onPress={() => {
-                        store.setFocus(s.common[0].id);
+                        store.setFocus(anc.id);
                         router.dismissTo("/");
                       }}
                       style={styles.treeLink}
@@ -269,7 +297,9 @@ export default function RelateScreen() {
               {result.ba ? (
                 <Section title={t("otherWay")}>
                   <View style={styles.reverse}>
-                    <Avatar person={a} size={44} />
+                    <View style={styles.thumb}>
+                      <Portrait person={a} height={60} radius={10} />
+                    </View>
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={{ color: c.text, fontSize: 16, fontWeight: "700" }}>{headline(b, a, result.ba)}</Text>
                       <Muted>{relationLines(result.ba, lang, t).sub}</Muted>
@@ -358,31 +388,35 @@ function PathNode({ person, onPress }: { person: Person; onPress: () => void }) 
 
 const styles = StyleSheet.create({
   pair: { flexDirection: "row", alignItems: "stretch" },
-  card: { flex: 1, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, paddingTop: 18, paddingBottom: 14, paddingHorizontal: 10, alignItems: "center", gap: 4, overflow: "hidden" },
-  cardStripe: { position: "absolute", top: 0, left: 16, right: 16, height: 4, borderRadius: 2 },
-  bigPhoto: { width: 104, height: 104, borderRadius: 52, borderWidth: 3, alignItems: "center", justifyContent: "center", marginBottom: 6 },
-  cardLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", textAlign: "center" },
-  cardName: { fontSize: 17, fontWeight: "700", textAlign: "center" },
-  change: { marginTop: 8, minHeight: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, justifyContent: "center" },
-  swap: { position: "absolute", left: "50%", top: 45, marginLeft: -25, width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: "center", justifyContent: "center" },
+  card: { flex: 1, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  emptyPhoto: { height: 232, alignItems: "center", justifyContent: "center" },
+  change: { position: "absolute", top: 10, right: 10, minHeight: 32, paddingHorizontal: 12, borderRadius: 16, justifyContent: "center" },
+  genderBar: { height: 5, alignSelf: "stretch" },
+  cardBody: { paddingTop: 12, paddingBottom: 14, paddingHorizontal: 10, alignItems: "center", gap: 4 },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 4, maxWidth: "100%" },
+  cardLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", textAlign: "center", marginBottom: 4 },
+  cardName: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  swap: { position: "absolute", left: "50%", top: 92, marginLeft: -25, width: 50, height: 50, borderRadius: 25, borderWidth: 4, alignItems: "center", justifyContent: "center" },
   hero: { marginTop: 16, borderRadius: 20, padding: 20, gap: 10 },
   heroKicker: { fontSize: 12, fontWeight: "700", letterSpacing: 1.4 },
   heroTitle: { fontSize: 24, fontWeight: "800", lineHeight: 31 },
   heroText: { fontSize: 15, lineHeight: 22, opacity: 0.9 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
-  meet: { alignItems: "center", padding: 16, paddingTop: 20, gap: 4 },
-  meetPhotos: { flexDirection: "row", gap: 10 },
-  meetPhoto: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, alignItems: "center", justifyContent: "center" },
-  meetKicker: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2, marginTop: 10 },
-  meetName: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  meet: { alignItems: "center", padding: 16, gap: 4 },
+  meetKicker: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2, marginBottom: 8 },
+  meetPhoto: { width: 170, borderRadius: 16, overflow: "hidden" },
+  meetName: { fontSize: 18, fontWeight: "800", textAlign: "center", marginTop: 8 },
   meetBoxes: { flexDirection: "row", gap: 10, marginTop: 14, alignSelf: "stretch" },
-  meetBox: { flex: 1, borderRadius: 14, padding: 12, gap: 3 },
+  meetBox: { flex: 1, borderRadius: 14, padding: 12, gap: 4 },
+  dots: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 14 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
   treeLink: { flexDirection: "row", alignItems: "center", gap: 2, minHeight: 44, paddingHorizontal: 12, marginTop: 6 },
   row: { flexDirection: "row", paddingVertical: 13, paddingHorizontal: 16, gap: 12 },
   rowLabel: { width: 110, fontSize: 14 },
   rowValue: { flex: 1, fontSize: 14, fontWeight: "600" },
   reverse: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  thumb: { width: 48 },
   node: { flexDirection: "row", alignItems: "center", gap: 12 },
   arrow: { flexDirection: "row", alignItems: "center", gap: 10, marginLeft: 19, paddingVertical: 4 },
   line: { width: 2, height: 26, marginRight: 9 },

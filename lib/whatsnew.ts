@@ -3,6 +3,19 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.6.1",
+    notes: {
+      en: [
+        "\"How are they related?\" shows both people with big photos, and what each is to the other under their photo",
+        "Where they meet: one shared ancestor with a big photo, and dots for how many generations up each person is",
+      ],
+      bm: [
+        "Halaman Hubungan menunjukkan kedua-dua orang dengan gambar besar, dan apa mereka kepada satu sama lain di bawah gambar",
+        "Mereka bertemu di: seorang leluhur bersama dengan gambar besar, dan titik untuk bilangan generasi ke atas setiap orang",
+      ],
+    },
+  },
+  {
     version: "2.6.0",
     notes: {
       en: [
