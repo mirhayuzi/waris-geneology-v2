@@ -198,14 +198,13 @@ const LINK_SQL = `INSERT INTO parent_child (id, parent_id, child_id, kind) VALUE
   ON CONFLICT(parent_id, child_id) DO UPDATE SET kind = excluded.kind`;
 
 /**
- * Android can close the database under the app (e.g. when the phone is low on memory and
- * the app was in the background behind the camera or gallery). Every later call then fails
- * with "NativeDatabase.prepareAsync has been rejected ... NullPointerException". When that
- * happens we open the database again and retry once; the data on disk is untouched.
+ * Expo can return a stale native connection after an Android runtime restart. Reopen
+ * with useNewConnection and retry once; the database file on disk is left in place.
+ * Ordinary SQL/constraint errors are not evidence of a stale connection.
  */
 export function isClosedDbError(e: unknown): boolean {
   const msg = String((e as Error)?.message ?? e);
-  return /NullPointerException|database is closed|has been closed|Access to closed resource|NativeDatabase\.\w+' has been rejected/i.test(msg);
+  return /NullPointerException|database is closed|has been closed|Access to closed resource|shared object.*already released/i.test(msg);
 }
 
 export class SqliteRepo implements Repo {
@@ -220,8 +219,17 @@ export class SqliteRepo implements Repo {
   }
 
   static async open(name = "waris.db"): Promise<SqliteRepo> {
-    const db = await SQLite.openDatabaseAsync(name);
-    await migrate(db);
+    let db = await SQLite.openDatabaseAsync(name);
+    try {
+      await migrate(db);
+    } catch (e) {
+      if (!isClosedDbError(e)) throw e;
+      // The normal reopen may return the same stale cached handle. Recovery must also
+      // cover startup: the instance guard below does not exist until migrations finish.
+      db = await SQLite.openDatabaseAsync(name, { useNewConnection: true });
+      // Read user_version again, so already-committed migrations are never repeated.
+      await migrate(db);
+    }
     return new SqliteRepo(db, name);
   }
 

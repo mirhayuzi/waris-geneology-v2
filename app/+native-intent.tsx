@@ -1,4 +1,4 @@
-import { setIncomingFile } from "@/lib/files";
+import { setIncomingFile } from "@/lib/incoming-file";
 
 /**
  * Files opened with Waris from other apps arrive as content:// or file:// links.
@@ -8,8 +8,7 @@ import { setIncomingFile } from "@/lib/files";
 export function redirectSystemPath({ path }: { path: string; initial: boolean }) {
   try {
     if (/^(content|file):\/\//i.test(path)) {
-      setIncomingFile(path);
-      return `/open?t=${Date.now()}`;
+      return `/open?t=${setIncomingFile(path)}`;
     }
     return path;
   } catch {
