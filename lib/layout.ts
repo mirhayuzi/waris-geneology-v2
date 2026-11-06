@@ -69,6 +69,8 @@ export interface LayoutOptions {
   down: number;
   /** Show "Add father / mother / spouse" placeholders */
   showAdd: boolean;
+  /** Also show "Add spouse" beside people who have no spouse yet (off: a tidier tree) */
+  showAddSpouse?: boolean;
   /** People whose children are folded away ("+N" on their card) */
   collapsed?: string[];
   /** Draw the original (plain views) tree instead of the game-style one */
@@ -152,7 +154,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
     });
     px += HALF_W + 10;
   }
-  if (partners.length === 0 && opts.showAdd) {
+  if (partners.length === 0 && opts.showAdd && opts.showAddSpouse) {
     const c: Card = {
       key: "add-spouse-focus",
       x: px,
@@ -244,7 +246,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
   // ---------- Descendants ----------
   const buildDown = (person: Person, gen: number, seen: Set<string>): DownNode => {
     const partner = graph.partners(person.id)[0];
-    const addSpouse = !partner && opts.showAdd;
+    const addSpouse = !partner && opts.showAdd && !!opts.showAddSpouse;
     const ownKids = graph.children(person.id).filter((k) => !seen.has(k.id));
     const isCollapsed = collapsed.has(person.id) && ownKids.length > 0;
     const kids = gen < opts.down && !isCollapsed ? ownKids.map((k) => buildDown(k, gen + 1, new Set([...seen, k.id]))) : [];

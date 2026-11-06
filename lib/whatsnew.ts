@@ -3,6 +3,21 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.6.2",
+    notes: {
+      en: [
+        "Tidier tree: no \"Add spouse\" box beside people without a spouse (turn it on in Tree view settings)",
+        "\"See in the tree\" on the relationship page shows only the line from the shared ancestor down to the two people",
+        "Bigger photos on tablets in \"How are they related?\"",
+      ],
+      bm: [
+        "Salasilah lebih kemas: tiada kotak \"Tambah pasangan\" di sebelah yang belum berpasangan (boleh dibuka dalam tetapan Paparan salasilah)",
+        "\"Lihat dalam salasilah\" di halaman Hubungan hanya menunjukkan laluan dari leluhur bersama ke dua orang itu",
+        "Gambar lebih besar di tablet dalam halaman Hubungan",
+      ],
+    },
+  },
+  {
     version: "2.6.1",
     notes: {
       en: [

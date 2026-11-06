@@ -1,6 +1,6 @@
 import { sortKey } from "./dates";
 import type { FamilyGraph } from "./graph";
-import type { LinkKind, Person } from "./model";
+import type { FamilySnapshot, LinkKind, ParentLink, Person } from "./model";
 
 /** "B is A's ___" in both languages. */
 export interface Kin {
@@ -459,4 +459,45 @@ export function relationSummary(graph: FamilyGraph, aId: string, bId: string): R
     if (toA && toB) out.via = { person: via, toA, toB };
   }
   return out;
+}
+
+/**
+ * Just the line between two blood relatives: their nearest shared ancestor (with spouse when they
+ * share the couple) and, below it, one person per generation down to each of them. Everyone else
+ * (other children, spouses, in-laws) is left out. Null when they don't share an ancestor above both.
+ */
+export function lineageSnapshot(graph: FamilyGraph, aId: string, bId: string): { snapshot: FamilySnapshot; ancestorId: string } | null {
+  const hit = aId === bId ? null : findBlood(graph, aId, bId);
+  if (!hit || hit.up === 0 || hit.down === 0) return null;
+  const common = hit.common.map((id) => graph.get(id)!).filter(Boolean);
+  const anc = common.find((p) => p.sex === "male") ?? common[0];
+  if (!anc) return null;
+  const keep = new Set<string>([anc.id]);
+  const links: ParentLink[] = [];
+  const lineage = (id: string) => graph.parentLinksOf(id).filter((l) => l.kind !== "step" && l.kind !== "milk");
+  // Walk up from a person to the ancestor, one blood parent per generation
+  const climb = (from: string, depth: number) => {
+    let cur = from;
+    keep.add(cur);
+    for (let r = depth; r >= 1; r--) {
+      const step = lineage(cur).find((l) => (r === 1 ? common.some((c) => c.id === l.parentId) : graph.ancestorDepths(l.parentId).get(anc.id) === r - 1));
+      if (!step) return;
+      if (r === 1) {
+        // the top child: linked to both of the shared couple
+        for (const l of lineage(cur)) if (common.some((c) => c.id === l.parentId)) links.push(l);
+        return;
+      }
+      links.push(step);
+      cur = step.parentId;
+      keep.add(cur);
+    }
+  };
+  climb(aId, hit.up);
+  climb(bId, hit.down);
+  for (const c of common) keep.add(c.id);
+  const unions = common.length > 1 ? graph.snapshot.unions.filter((u) => keep.has(u.partnerA) && keep.has(u.partnerB) && common.some((c) => c.id === u.partnerA) && common.some((c) => c.id === u.partnerB)) : [];
+  return {
+    ancestorId: anc.id,
+    snapshot: { ...graph.snapshot, persons: graph.snapshot.persons.filter((p) => keep.has(p.id)), unions, links: links.filter((l) => keep.has(l.parentId) && keep.has(l.childId)) },
+  };
 }

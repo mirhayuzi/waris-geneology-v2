@@ -16,7 +16,7 @@ export const Portrait = memo(function Portrait({ person, height, radius = 0 }: {
   if (uri) {
     return (
       <View style={[box, { backgroundColor: c.surfaceAlt }]}>
-        <Image source={{ uri }} style={{ width: "100%", height }} contentFit="cover" contentPosition="top" transition={120} recyclingKey={uri} />
+        <Image source={{ uri }} style={{ width: "100%", height }} contentFit="cover" contentPosition="center" transition={120} recyclingKey={uri} />
       </View>
     );
   }

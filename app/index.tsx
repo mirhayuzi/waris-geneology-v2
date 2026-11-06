@@ -277,6 +277,15 @@ export default function TreeScreen() {
           <Switch value={treeOptions.showAdd} onValueChange={(showAdd) => setTreeOptions({ ...treeOptions, showAdd })} trackColor={{ true: c.primary }} />
         </View>
         <View style={styles.optRow}>
+          <Text style={{ color: treeOptions.showAdd ? c.text : c.muted, fontSize: 16, flex: 1 }}>{t("showAddSpouse")}</Text>
+          <Switch
+            value={!!treeOptions.showAddSpouse}
+            disabled={!treeOptions.showAdd}
+            onValueChange={(showAddSpouse) => setTreeOptions({ ...treeOptions, showAddSpouse })}
+            trackColor={{ true: c.primary }}
+          />
+        </View>
+        <View style={styles.optRow}>
           <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{t("classicTree")}</Text>
           <Switch value={!!treeOptions.classic} onValueChange={(classic) => setTreeOptions({ ...treeOptions, classic })} trackColor={{ true: c.primary }} />
         </View>

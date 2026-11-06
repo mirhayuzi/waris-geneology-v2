@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { PersonPicker } from "@/components/PersonPicker";
 import { Portrait } from "@/components/Portrait";
@@ -29,6 +29,9 @@ export default function RelateScreen() {
   const [bId, setB] = useState(params.b);
   const [picking, setPicking] = useState<"a" | "b" | null>(null);
   const [editing, setEditing] = useState<{ key: string; example: string; value: string } | null>(null);
+  // Photos keep an upright shape: on a tablet the cards are wider, so the photos get taller too
+  const { width: winW, height: winH } = useWindowDimensions();
+  const photoH = Math.round(Math.max(200, Math.min(560, winH * 0.5, ((Math.min(winW, 900) - 32 - 12) / 2) * 1.35)));
   const a = graph.get(aId);
   const b = graph.get(bId);
   const home = graph.get(homeId);
@@ -66,9 +69,9 @@ export default function RelateScreen() {
     <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
       <Pressable onPress={() => (p ? open(p) : setPicking(which))} accessibilityRole="button" accessibilityLabel={p ? fullName(p) : t("pickPerson")}>
         {p ? (
-          <Portrait person={p} height={232} />
+          <Portrait person={p} height={photoH} />
         ) : (
-          <View style={[styles.emptyPhoto, { backgroundColor: c.surfaceAlt }]}>
+          <View style={[styles.emptyPhoto, { height: photoH, backgroundColor: c.surfaceAlt }]}>
             <Icon name="person-search" size={56} color={c.primary} />
           </View>
         )}
@@ -166,7 +169,7 @@ export default function RelateScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel={t("swapPeople")}
-              style={[styles.swap, { backgroundColor: c.primary, borderColor: c.background }]}
+              style={[styles.swap, { top: photoH / 2 - 25, backgroundColor: c.primary, borderColor: c.background }]}
             >
               <Icon name="swap-horiz" size={24} color={c.primaryText} />
             </Pressable>
@@ -232,7 +235,7 @@ export default function RelateScreen() {
                           <Text style={{ color: c.text, fontSize: 13, fontWeight: "700" }} numberOfLines={1}>
                             {who.givenName}
                           </Text>
-                          <Text style={{ color: c.primary, fontSize: 16, fontWeight: "800" }}>{cap(term(kin).replace(/ (lelaki|perempuan)$/, ""))}</Text>
+                          <Text style={{ color: c.primary, fontSize: 16, fontWeight: "800" }}>{n >= 4 ? t("forebear") : cap(term(kin).replace(/ (lelaki|perempuan)$/, ""))}</Text>
                           <View style={styles.dots} accessibilityLabel={genUp(n)}>
                             {Array.from({ length: Math.min(n, 6) }, (_, i) => (
                               <View key={i} style={[styles.dot, { backgroundColor: c.primary }]} />
@@ -244,10 +247,7 @@ export default function RelateScreen() {
                       ))}
                     </View>
                     <Pressable
-                      onPress={() => {
-                        store.setFocus(anc.id);
-                        router.dismissTo("/");
-                      }}
+                      onPress={() => router.push(`/lineage?a=${a.id}&b=${b.id}`)}
                       style={styles.treeLink}
                       accessibilityRole="button"
                     >
@@ -389,14 +389,14 @@ function PathNode({ person, onPress }: { person: Person; onPress: () => void }) 
 const styles = StyleSheet.create({
   pair: { flexDirection: "row", alignItems: "stretch" },
   card: { flex: 1, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
-  emptyPhoto: { height: 232, alignItems: "center", justifyContent: "center" },
+  emptyPhoto: { alignItems: "center", justifyContent: "center" },
   change: { position: "absolute", top: 10, right: 10, minHeight: 32, paddingHorizontal: 12, borderRadius: 16, justifyContent: "center" },
   genderBar: { height: 5, alignSelf: "stretch" },
   cardBody: { paddingTop: 12, paddingBottom: 14, paddingHorizontal: 10, alignItems: "center", gap: 4 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 4, maxWidth: "100%" },
   cardLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", textAlign: "center", marginBottom: 4 },
   cardName: { fontSize: 18, fontWeight: "800", textAlign: "center" },
-  swap: { position: "absolute", left: "50%", top: 92, marginLeft: -25, width: 50, height: 50, borderRadius: 25, borderWidth: 4, alignItems: "center", justifyContent: "center" },
+  swap: { position: "absolute", left: "50%", marginLeft: -25, width: 50, height: 50, borderRadius: 25, borderWidth: 4, alignItems: "center", justifyContent: "center" },
   hero: { marginTop: 16, borderRadius: 20, padding: 20, gap: 10 },
   heroKicker: { fontSize: 12, fontWeight: "700", letterSpacing: 1.4 },
   heroTitle: { fontSize: 24, fontWeight: "800", lineHeight: 31 },

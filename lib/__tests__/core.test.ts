@@ -3,7 +3,7 @@ import { buildBackup, parseBackup } from "../backup";
 import { ageAt, formatDate, parseInput, toInput } from "../dates";
 import { toGedcom } from "../gedcom";
 import { FamilyGraph } from "../graph";
-import { bmCousin, connectionPath, describePath, describeVia, familySide, relationships, relationSummary, relationText } from "../kinship";
+import { bmCousin, connectionPath, describePath, describeVia, familySide, lineageSnapshot, relationships, relationSummary, relationText } from "../kinship";
 import { fatherCandidates, possibleDuplicates } from "../match";
 import { DEFAULT_OPTIONS, layoutTree } from "../layout";
 import { convertLegacy } from "../legacy";
@@ -150,7 +150,7 @@ describe("tree layout", () => {
     // placeholders: Mohammad's line goes up to Norbidin; Siti's mother is unknown
     const adds = l.cards.filter((c) => c.add).map((c) => `${c.add!.role}:${c.add!.of}`);
     expect(adds).toContain("mother:siti");
-    expect(adds).toContain("spouse:fatimah");
+    expect(adds).not.toContain("spouse:fatimah"); // "Add spouse" boxes are off unless asked for
     // everything on-canvas, nothing overlapping in the same row
     for (const c of l.cards) {
       expect(c.x).toBeGreaterThanOrEqual(0);
@@ -171,7 +171,24 @@ describe("tree layout", () => {
   it("handles a lone person", () => {
     const l = layoutTree(new FamilyGraph({ ...family(), links: [], unions: [] }), "nisa")!;
     expect(l.cards.filter((c) => c.person).length).toBe(1);
-    expect(l.cards.filter((c) => c.add).map((c) => c.add!.role).sort()).toEqual(["father", "mother", "spouse"]);
+    expect(l.cards.filter((c) => c.add).map((c) => c.add!.role).sort()).toEqual(["father", "mother"]);
+    const withSpouse = layoutTree(new FamilyGraph({ ...family(), links: [], unions: [] }), "nisa", { ...DEFAULT_OPTIONS, showAddSpouse: true })!;
+    expect(withSpouse.cards.filter((c) => c.add).map((c) => c.add!.role).sort()).toEqual(["father", "mother", "spouse"]);
+  });
+  it("keeps only the line between two cousins", () => {
+    const g = graph();
+    const line = lineageSnapshot(g, "fatimah", "razak")!;
+    expect(line.ancestorId).toBe("sibil");
+    expect(line.snapshot.persons.map((p) => p.id).sort()).toEqual(["ali", "fatimah", "mirhayuzi", "razak", "sibil", "siti"]);
+    const sub = new FamilyGraph(line.snapshot);
+    expect(sub.children("sibil").map((p) => p.id).sort()).toEqual(["ali", "siti"]);
+    expect(sub.children("siti").map((p) => p.id)).toEqual(["mirhayuzi"]);
+    // a couple at the top: both kept, the husband leads
+    const pair = lineageSnapshot(g, "fatimah", "aishah")!;
+    expect(pair.ancestorId).toBe("mohammad");
+    expect(pair.snapshot.persons.map((p) => p.id).sort()).toEqual(["aishah", "fatimah", "mirhayuzi", "mohammad", "siti"]);
+    expect(pair.snapshot.unions.length).toBe(1);
+    expect(lineageSnapshot(g, "fatimah", "mirhayuzi")).toBeNull(); // direct line: nothing in between to show
   });
   it("groups children under the right partner when there are two wives", () => {
     const f = family();

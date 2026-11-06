@@ -65,6 +65,7 @@ function Gate() {
         <Stack.Screen name="edit" options={{ presentation: "modal" }} />
         <Stack.Screen name="union" options={{ presentation: "modal" }} />
         <Stack.Screen name="relate" />
+        <Stack.Screen name="lineage" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="unlinked" />
         <Stack.Screen name="duplicates" />
