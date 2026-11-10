@@ -28,6 +28,7 @@ const EMPTY: FamilySnapshot = {
 interface Store {
   ready: boolean;
   error?: string;
+  retryStartup: () => void;
   graph: FamilyGraph;
   lang: Lang;
   t: (key: TKey, vars?: Record<string, string | number>) => string;
@@ -152,6 +153,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [snapshot, setSnapshot] = useState<FamilySnapshot>(EMPTY);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string>();
+  const [startupAttempt, setStartupAttempt] = useState(0);
   const [lang, setLangState] = useState<Lang>(defaultLang());
   const [treeOptions, setTreeOptionsState] = useState<LayoutOptions>(DEFAULT_OPTIONS);
   const [focusId, setFocusId] = useState<string>();
@@ -181,6 +183,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    setError(undefined);
+    setReady(false);
     (async () => {
       try {
         const repo = await openRepo();
@@ -233,7 +237,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setReady(true);
       }
     })();
-  }, []);
+  }, [startupAttempt]);
 
   // Keep the focus on someone who exists
   useEffect(() => {
@@ -246,6 +250,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const value: Store = {
     ready,
     error,
+    retryStartup: () => setStartupAttempt((attempt) => attempt + 1),
     graph,
     lang,
     t,

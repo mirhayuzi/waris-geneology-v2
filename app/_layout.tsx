@@ -1,7 +1,7 @@
 import { router, Stack, useRootNavigationState } from "expo-router";
 import { ShareIntentProvider, useShareIntentContext } from "expo-share-intent";
-import { useEffect } from "react";
-import { setIncomingFile } from "@/lib/files";
+import { useEffect, useRef } from "react";
+import { setIncomingFile } from "@/lib/incoming-file";
 import { StatusBar } from "expo-status-bar";
 // Only the five weights the app uses (importing the whole family adds every style to the APK)
 import { PlusJakartaSans_400Regular } from "@expo-google-fonts/plus-jakarta-sans/400Regular";
@@ -12,6 +12,7 @@ import { PlusJakartaSans_800ExtraBold } from "@expo-google-fonts/plus-jakarta-sa
 import { useFonts } from "expo-font";
 import { ActivityIndicator, View } from "react-native";
 import { Text } from "@/components/Text";
+import { Button } from "@/components/ui";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -25,12 +26,13 @@ import { useColors } from "@/lib/theme";
 function ShareListener() {
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
   const navReady = !!useRootNavigationState()?.key;
+  const handled = useRef<typeof shareIntent | null>(null);
   useEffect(() => {
-    if (!hasShareIntent || !navReady) return;
+    if (!hasShareIntent || !navReady || handled.current === shareIntent) return;
+    handled.current = shareIntent;
     const file = shareIntent.files?.[0];
     if (file?.path) {
-      setIncomingFile(file.path);
-      router.push(`/open?t=${Date.now()}`);
+      router.push(`/open?t=${setIncomingFile(file.path)}`);
     }
     resetShareIntent();
   }, [hasShareIntent, shareIntent, resetShareIntent, navReady]);
@@ -38,7 +40,7 @@ function ShareListener() {
 }
 
 function Gate() {
-  const { ready, error } = useStore();
+  const { ready, error, retryStartup, t } = useStore();
   const c = useColors();
   // The Waris font; if it fails to load, the phone's own font is used
   const [fontsLoaded, fontError] = useFonts({
@@ -51,7 +53,17 @@ function Gate() {
   if (!ready || error || (!fontsLoaded && !fontError)) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.background, padding: 24 }}>
-        {error ? <Text style={{ color: c.danger, textAlign: "center" }}>{error}</Text> : <ActivityIndicator color={c.primary} />}
+        {error ? (
+          <>
+            <Text style={{ color: c.danger, textAlign: "center", marginBottom: 16 }}>{t("databaseOpenFailed")}</Text>
+            <Button title={t("tryAgain")} onPress={retryStartup} />
+            <Text selectable style={{ color: c.muted, textAlign: "center", marginTop: 16 }}>
+              {error}
+            </Text>
+          </>
+        ) : (
+          <ActivityIndicator color={c.primary} />
+        )}
       </View>
     );
   }

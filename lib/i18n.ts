@@ -170,6 +170,10 @@ const en = {
   backupSaved: "Backup saved.",
   backupFailed:
     "Could not read that file. Choose a Waris backup (.json), a Waris Excel file (.xlsx), or the old app's CSV files (members.csv, marriages.csv, parent-child.csv) together.",
+  incomingFileUnavailable: "Waris could not access the shared file. Save it to Downloads, then choose it here.",
+  chooseFile: "Choose file",
+  databaseOpenFailed: "Waris could not open the family database. Try again to reconnect.",
+  tryAgain: "Try again",
   restoreDesc:
     "Choose a .json backup or a Waris Excel file (.xlsx) — photos named by ID (P0012.jpg) can be picked with it. Or select all 3 CSV files from the old app at once. Old CSV backups do not contain photos.",
   exportGedcom: "Export GEDCOM (.ged)",
@@ -502,6 +506,10 @@ const bm: Record<TKey, string> = {
   backupSaved: "Sandaran disimpan.",
   backupFailed:
     "Fail tidak dapat dibaca. Pilih fail sandaran Waris (.json), fail Excel Waris (.xlsx), atau ketiga-tiga fail CSV aplikasi lama (members.csv, marriages.csv, parent-child.csv) serentak.",
+  incomingFileUnavailable: "Waris tidak dapat mengakses fail yang dikongsi. Simpan fail ke Muat Turun, kemudian pilih fail di sini.",
+  chooseFile: "Pilih fail",
+  databaseOpenFailed: "Waris tidak dapat membuka pangkalan data keluarga. Cuba lagi untuk menyambung semula.",
+  tryAgain: "Cuba lagi",
   restoreDesc:
     "Pilih fail sandaran .json atau fail Excel Waris (.xlsx) — gambar bernama ID (P0012.jpg) boleh dipilih bersama. Atau pilih ketiga-tiga fail CSV dari aplikasi lama serentak. Sandaran CSV lama tidak mengandungi gambar.",
   exportGedcom: "Eksport GEDCOM (.ged)",

@@ -85,7 +85,8 @@ export function sanitize(s: FamilySnapshot): FamilySnapshot {
 export function parseBackup(text: string): ParsedBackup {
   let json: unknown;
   try {
-    json = JSON.parse(text);
+    // Some editors/exporters prepend a UTF-8 byte-order mark to otherwise valid JSON.
+    json = JSON.parse(text.replace(/^\uFEFF/, ""));
   } catch {
     throw new Error("not-json");
   }
