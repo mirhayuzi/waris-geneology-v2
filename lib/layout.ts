@@ -34,7 +34,15 @@ export interface Card {
   more?: number;
   /** Where the branch button sits (below the couple), when this person has children; `open` when they are drawn */
   chip?: { x: number; y: number; open: boolean };
+  /** One of several wives (or husbands) of the focus person: her number, 1, 2, 3 ... */
+  wife?: number;
+  /** A child of wife number `mother`: drawn with a dot in her colour */
+  mother?: number;
 }
+
+/** Each wife's colour when someone has several: teal, orange, purple, green, then again */
+export const WIFE_COLORS = ["#0E8C8C", "#D9661A", "#7A4FD6", "#2F8A3A", "#B5427A", "#3D6FB6"];
+export const wifeColor = (n: number) => WIFE_COLORS[(n - 1) % WIFE_COLORS.length];
 
 /** Background frame grouping the two halves of a couple. */
 export interface Frame {
@@ -56,6 +64,8 @@ export interface TreeLayout {
   lines: Line[];
   /** The same connections as whole parent-to-child paths, for drawing smooth curved corners */
   curves: number[][];
+  /** For each curve: 0 for the usual line colour, or the wife number whose colour it takes */
+  tints: number[];
   width: number;
   height: number;
   focusX: number;
@@ -110,6 +120,13 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
   const frames: Frame[] = [];
   const lines: Line[] = [];
   const curves: number[][] = [];
+  const tints: number[] = [];
+  const addCurve = (tint: number, ...paths: number[][]) => {
+    for (const pts of paths) {
+      curves.push(pts);
+      tints.push(tint);
+    }
+  };
 
   // ---------- Middle row: focus + partners (spouses and other co-parents) ----------
   const partnerIds: string[] = graph.partners(focusId).map((p) => p.id);
@@ -119,6 +136,8 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
     }
   }
   const partners = partnerIds.map((id) => graph.get(id)!);
+  // Two or more wives (or husbands): each gets her own column below, with her own children under her
+  const wivesRow = opts.down > 0 && partners.length >= 2;
 
   const focusCard: Card = {
     key: "focus",
@@ -134,7 +153,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
   const rowTop = FOCUS_H - CARD_H; // partner cards align to the bottom of the focus card
   let px = FOCUS_W / 2 + 12;
   const partnerCards: Card[] = [];
-  for (const p of partners) {
+  for (const p of wivesRow ? [] : partners) {
     const c: Card = {
       key: `partner-${p.id}`,
       x: px,
@@ -229,7 +248,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
       key: `l-${path}`,
       points: [cx, bottom, cx, midY, targetX, midY, targetX, targetY],
     });
-    curves.push([cx, bottom, cx, midY, targetX, midY, targetX, targetY]);
+    addCurve(0, [cx, bottom, cx, midY, targetX, midY, targetX, targetY]);
 
     const inner = (node.fatherUp?.width ?? 0) + (node.motherUp?.width ?? 0) + (node.fatherUp && node.motherUp ? GAP_X : 0);
     let off = left + (node.width - inner) / 2;
@@ -264,7 +283,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
     };
   };
 
-  const placeDown = (node: DownNode, left: number, y: number, path: string): { x: number; y: number } => {
+  const placeDown = (node: DownNode, left: number, y: number, path: string, mother?: number): { x: number; y: number } => {
     const self = node.partner || node.addSpouse ? COUPLE_W : HALF_W;
     const x0 = left + (node.width - self) / 2;
     frames.push({ key: `f-${path}`, x: x0, y, w: self, h: CARD_H });
@@ -275,6 +294,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
       w: HALF_W,
       h: CARD_H,
       person: node.person,
+      mother,
       hidden: node.hidden,
       more: node.more,
       chip: node.kids.length || node.hidden || node.more ? { x: x0 + self / 2, y: y + CARD_H, open: node.kids.length > 0 } : undefined,
@@ -311,12 +331,12 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
 
   const kidsWidth = (kids: DownNode[]) => kids.reduce((s, k) => s + k.width, 0) + Math.max(0, kids.length - 1) * GAP_X;
 
-  const placeKids = (kids: DownNode[], left: number, y: number, fromX: number, fromY: number, path: string) => {
+  const placeKids = (kids: DownNode[], left: number, y: number, fromX: number, fromY: number, path: string, mother = 0) => {
     const busY = y - ROW_GAP / 2;
     const tops: number[] = [];
     let off = left;
     kids.forEach((k, i) => {
-      const top = placeDown(k, off, y, `${path}-${i}`);
+      const top = placeDown(k, off, y, `${path}-${i}`, mother || undefined);
       tops.push(top.x);
       off += k.width + GAP_X;
     });
@@ -326,11 +346,44 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
     lines.push({ key: `l-${path}-bus`, points: [minX, busY, maxX, busY] });
     tops.forEach((x, i) => {
       lines.push({ key: `l-${path}-k${i}`, points: [x, busY, x, y] });
-      curves.push([fromX, fromY, fromX, busY, x, busY, x, y]);
+      addCurve(mother, [fromX, fromY, fromX, busY, x, busY, x, y]);
     });
   };
 
-  if (opts.down > 0) {
+  if (wivesRow) {
+    const seen = new Set([focusId]);
+    const cols = partners.map((p, i) => {
+      const kids = graph.childrenWith(focusId, p.id).map((k) => buildDown(k, 1, new Set([...seen, k.id])));
+      return { wife: p as Person | null, n: i + 1, kids, w: Math.max(HALF_W, kidsWidth(kids)) };
+    });
+    const solo = graph.childrenWith(focusId, null).map((k) => buildDown(k, 1, new Set([...seen, k.id])));
+    if (solo.length) cols.push({ wife: null, n: 0, kids: solo, w: kidsWidth(solo) });
+    const total = cols.reduce((s, col) => s + col.w, 0) + (cols.length - 1) * GAP_X * 2;
+    const busY = FOCUS_H + ROW_GAP / 2;
+    const wifeY = FOCUS_H + ROW_GAP;
+    const kidsY = wifeY + CARD_H + ROW_GAP;
+    let left = -total / 2;
+    const centers: number[] = [];
+    cols.forEach((col, ci) => {
+      const cx = left + col.w / 2;
+      centers.push(cx);
+      if (col.wife) {
+        const card: Card = { key: `wife-${col.wife.id}`, x: cx - HALF_W / 2, y: wifeY, w: HALF_W, h: CARD_H, person: col.wife, wife: col.n };
+        cards.push(card);
+        frames.push({ key: `f-wife-${col.wife.id}`, x: card.x, y: wifeY, w: HALF_W, h: CARD_H });
+        lines.push({ key: `l-wife-${ci}`, points: [cx, busY, cx, wifeY] });
+        addCurve(0, [0, FOCUS_H, 0, busY, cx, busY, cx, wifeY]);
+        if (col.kids.length) placeKids(col.kids, left + (col.w - kidsWidth(col.kids)) / 2, kidsY, cx, wifeY + CARD_H, `wife${ci}`, col.n);
+      } else {
+        // children whose other parent is not recorded hang straight from the husband's line
+        addCurve(0, [0, FOCUS_H, 0, busY, cx, busY]);
+        placeKids(col.kids, left, kidsY, cx, busY, `solo${ci}`);
+      }
+      left += col.w + GAP_X * 2;
+    });
+    lines.push({ key: "l-wives-stem", points: [0, FOCUS_H, 0, busY] });
+    lines.push({ key: "l-wives-bus", points: [Math.min(0, ...centers), busY, Math.max(0, ...centers), busY] });
+  } else if (opts.down > 0) {
     const groups: { from: Card | null; kids: DownNode[] }[] = [];
     const seen = new Set([focusId]);
     partners.forEach((p, i) => {
@@ -357,10 +410,10 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
             key: `l-join-${gi}`,
             points: [0, FOCUS_H, 0, fromY, pc, fromY, pc, gr.from.y + CARD_H],
           });
-          curves.push([0, FOCUS_H, 0, fromY, fromX, fromY], [pc, gr.from.y + CARD_H, pc, fromY, fromX, fromY]);
+          addCurve(0, [0, FOCUS_H, 0, fromY, fromX, fromY], [pc, gr.from.y + CARD_H, pc, fromY, fromX, fromY]);
         } else {
           lines.push({ key: `l-join-${gi}`, points: [0, FOCUS_H, 0, fromY] });
-          curves.push([0, FOCUS_H, 0, fromY]);
+          addCurve(0, [0, FOCUS_H, 0, fromY]);
         }
         placeKids(gr.kids, left, y, fromX, fromY, `down${gi}`);
         left += kidsWidth(gr.kids) + GAP_X * 2;
@@ -394,6 +447,7 @@ export function layoutTree(graph: FamilyGraph, focusId: string, opts: LayoutOpti
     frames,
     lines,
     curves,
+    tints,
     width: maxX - minX + PAD * 2,
     height: maxY - minY + PAD * 2,
     focusX: dx,

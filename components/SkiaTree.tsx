@@ -33,7 +33,7 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import type { TreeBackground } from "@/lib/backgrounds";
-import type { Card, TreeLayout } from "@/lib/layout";
+import { type Card, type TreeLayout, wifeColor } from "@/lib/layout";
 import { cardName, type Person } from "@/lib/model";
 import { onTreePhotos, treePhoto } from "@/lib/skia-photos";
 import { useStore } from "@/lib/store";
@@ -338,35 +338,41 @@ export const SkiaTree = forwardRef<TreeCanvasHandle, Props>(function SkiaTree({ 
       scale.value = s;
     });
 
+  // Double tap zooms in, but only on empty space: a tap on a person always opens them.
+  const onDouble = useCallback(
+    (x: number, y: number, s: number, ox: number, oy: number) => {
+      if (hit(x, y, s, ox, oy)) return;
+      const target = s < 0.95 ? Math.min(s * 1.8, 1.2) : Math.min(s * 1.6, MAX_SCALE);
+      tx.value = withTiming(x - (x - ox) * (target / s), { duration: 240 });
+      ty.value = withTiming(y - (y - oy) * (target / s), { duration: 240 });
+      scale.value = withTiming(target, { duration: 240 });
+    },
+    [hit, tx, ty, scale],
+  );
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
-    .maxDuration(250)
+    .maxDuration(300)
     .onEnd((e, ok) => {
-      if (!ok) return;
-      const target = scale.value < 0.95 ? Math.min(scale.value * 1.8, 1.2) : Math.min(scale.value * 1.6, MAX_SCALE);
-      tx.value = withTiming(e.x - (e.x - tx.value) * (target / scale.value), {
-        duration: 240,
-      });
-      ty.value = withTiming(e.y - (e.y - ty.value) * (target / scale.value), {
-        duration: 240,
-      });
-      scale.value = withTiming(target, { duration: 240 });
+      if (ok) runOnJS(onDouble)(e.x, e.y, scale.value, tx.value, ty.value);
     });
 
+  // A single tap fires straight away (it no longer waits to see if a second tap follows), and a
+  // slower press (common on tablets) still counts as a tap rather than being dropped.
   const tap = Gesture.Tap()
-    .maxDuration(300)
-    .maxDistance(12)
+    .maxDuration(550)
+    .maxDistance(16)
     .onEnd((e, ok) => {
       if (ok) runOnJS(onTap)(e.x, e.y, scale.value, tx.value, ty.value);
     });
 
   const longPress = Gesture.LongPress()
-    .minDuration(380)
+    .minDuration(550)
+    .maxDistance(16)
     .onStart((e) => {
       runOnJS(onLong)(e.x, e.y, scale.value, tx.value, ty.value);
     });
 
-  const gesture = Gesture.Simultaneous(pan, pinch, Gesture.Exclusive(doubleTap, tap, longPress));
+  const gesture = Gesture.Simultaneous(pan, pinch, doubleTap, Gesture.Exclusive(longPress, tap));
 
   const onLayout = (e: LayoutChangeEvent) => setView({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
 
@@ -531,16 +537,21 @@ function drawTree(
 ) {
   const near = (b: { x: number; y: number; w: number; h: number }) => b.x + b.w >= win.x0 && b.x <= win.x1 && b.y + b.h + 40 >= win.y0 && b.y <= win.y1;
 
-  // Connections: one path, corners rounded into smooth curves
-  const path = Skia.Path.Make();
-  for (const pts of layout.curves) {
+  // Connections: one path per colour (a wife's line takes her colour), corners rounded into smooth curves
+  const paths = new Map<number, ReturnType<typeof Skia.Path.Make>>();
+  layout.curves.forEach((pts, i) => {
+    const tint = layout.tints?.[i] ?? 0;
+    let path = paths.get(tint);
+    if (!path) paths.set(tint, (path = Skia.Path.Make()));
     path.moveTo(pts[0], pts[1]);
-    for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
-  }
-  const linePaint = paint(c.line, { stroke: win.simple ? 3 : 2 });
+    for (let j = 2; j < pts.length; j += 2) path.lineTo(pts[j], pts[j + 1]);
+  });
   const corner = Skia.PathEffect.MakeCorner(18);
-  if (corner) linePaint.setPathEffect(corner);
-  cv.drawPath(path, linePaint);
+  for (const [tint, path] of paths) {
+    const linePaint = paint(tint ? wifeColor(tint) : c.line, { stroke: (win.simple ? 3 : 2) + (tint ? 1 : 0) });
+    if (corner) linePaint.setPathEffect(corner);
+    cv.drawPath(path, linePaint);
+  }
 
   // Frames (a soft shadow, then the card face)
   const shadow = paint("#000000", { alpha: 0.1 });
@@ -557,6 +568,7 @@ function drawTree(
     if (!near(k)) continue;
     if (win.simple) drawSimple(cv, k, c);
     else drawCard(cv, k, c, labels, life);
+    if (k.wife || k.mother) drawWifeMark(cv, k, c, win.simple);
     if (k.chip) drawChip(cv, k, c, win.simple);
   }
 }
@@ -688,6 +700,28 @@ function drawSimple(cv: SkCanvas, k: Card, c: Colors) {
     fit: true,
   });
   name.paint(cv, k.x + 4, k.y + 76);
+}
+
+/** A wife's card gets her colour as a border and her number in a circle; her children get a dot in that colour. */
+function drawWifeMark(cv: SkCanvas, k: Card, c: Colors, simple: boolean) {
+  const z = simple ? 1.8 : 1;
+  if (k.wife) {
+    const color = wifeColor(k.wife);
+    cv.drawRRect(rrect(k.x - 1, k.y - 1, k.w + 2, k.h + 2, 9), paint(color, { stroke: 2.5 * z }));
+    const r = 12 * z;
+    const cx = k.x + 2;
+    const cy = k.y + 2;
+    cv.drawCircle(cx, cy, r + 2, paint(c.surface));
+    cv.drawCircle(cx, cy, r, paint(color));
+    const label = para(String(k.wife), 13 * z, "#ffffff", r * 2, { bold: true });
+    label.paint(cv, cx - r, cy - label.getHeight() / 2);
+  } else if (k.mother) {
+    const r = 5 * z;
+    const cx = k.x + k.w - 10 * z;
+    const cy = k.y + 12 * z;
+    cv.drawCircle(cx, cy, r + 1.5, paint(c.surface));
+    cv.drawCircle(cx, cy, r, paint(wifeColor(k.mother)));
+  }
 }
 
 /** "−" on an open branch (tap to fold it away), "+N" on a folded one or below the last generation shown. */

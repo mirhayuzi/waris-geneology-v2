@@ -3,6 +3,19 @@ import type { Lang } from "./i18n";
 /** Short release notes shown on the About page ("What's new"). Newest first. */
 export const RELEASES: { version: string; notes: Record<Lang, string[]> }[] = [
   {
+    version: "2.7.0",
+    notes: {
+      en: [
+        "Several wives: each wife gets her own number and colour, with her own children under her, in the tree and in the family tree certificate",
+        "Tapping a person on a tablet works first time: a tap no longer turns into a zoom",
+      ],
+      bm: [
+        "Beberapa isteri: setiap isteri ada nombor dan warna sendiri, dengan anak-anaknya sendiri di bawahnya, dalam salasilah dan dalam Sijil Salasilah",
+        "Ketik seseorang di tablet berfungsi pada kali pertama: ketikan tidak lagi menjadi zum",
+      ],
+    },
+  },
+  {
     version: "2.6.2",
     notes: {
       en: [

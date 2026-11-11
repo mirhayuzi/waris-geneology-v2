@@ -1,4 +1,4 @@
-import type { Card, TreeLayout } from "./layout";
+import { type Card, type TreeLayout, wifeColor } from "./layout";
 import { cardName, type Person } from "./model";
 
 /**
@@ -126,6 +126,17 @@ function cardSvg(k: Card, photos: ChartPhotos, l: ChartLabels): string {
     y += fs + 2;
   });
   out.push(`<text x="${cx}" y="${k.y + k.h - 8}" text-anchor="middle" font-size="${fs - 2}" fill="#63677A">${esc(l.life(p))}</text>`);
+  // Several wives: her colour and number on her card, a dot in her colour on each of her children
+  if (k.wife) {
+    const col = wifeColor(k.wife);
+    out.push(
+      `<rect x="${k.x - 1}" y="${k.y - 1}" width="${k.w + 2}" height="${k.h + 2}" rx="9" fill="none" stroke="${col}" stroke-width="2.5"/>`,
+      `<circle cx="${k.x + 2}" cy="${k.y + 2}" r="14" fill="#fff"/><circle cx="${k.x + 2}" cy="${k.y + 2}" r="12" fill="${col}"/>`,
+      `<text x="${k.x + 2}" y="${k.y + 6.5}" text-anchor="middle" font-size="13" font-weight="800" fill="#fff">${k.wife}</text>`,
+    );
+  } else if (k.mother) {
+    out.push(`<circle cx="${k.x + k.w - 10}" cy="${k.y + 12}" r="5" fill="${wifeColor(k.mother)}"/>`);
+  }
   return out.join("");
 }
 
@@ -133,7 +144,12 @@ function cardSvg(k: Card, photos: ChartPhotos, l: ChartLabels): string {
 export function treeSvg(layout: TreeLayout, photos: ChartPhotos, l: ChartLabels): string {
   // a soft band behind each couple
   const frames = layout.frames.map((f) => `<rect x="${f.x - 3}" y="${f.y - 3}" width="${f.w + 6}" height="${f.h + 6}" rx="10" fill="#E8EBF7"/>`).join("");
-  const lines = layout.curves.map((pts) => `<path d="${roundedPath(pts)}" fill="none" stroke="#6A6F86" stroke-width="2" stroke-linecap="round"/>`).join("");
+  const lines = layout.curves
+    .map((pts, i) => {
+      const tint = layout.tints?.[i] ?? 0;
+      return `<path d="${roundedPath(pts)}" fill="none" stroke="${tint ? wifeColor(tint) : "#6A6F86"}" stroke-width="${tint ? 3 : 2}" stroke-linecap="round"/>`;
+    })
+    .join("");
   const cards = layout.cards.map((k) => cardSvg(k, photos, l)).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${layout.width} ${layout.height}" preserveAspectRatio="xMidYMid meet">${lines}${frames}${cards}</svg>`;
 }
